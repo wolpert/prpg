@@ -1,0 +1,28 @@
+# Auto-merge every Dependabot PR once required status checks pass.
+#
+# Requires a repo branch-protection rule on `main` that requires the CI workflow
+# check (job `build` from .github/workflows/ci.yml) before merge — the `--auto`
+# flag waits on those required checks. Without that rule, `--auto` merges as
+# soon as mergeability is satisfied (i.e. effectively immediately).
+name: Approve Dependabot Pushes
+on: pull_request_target
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependabot:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    steps:
+      - name: Approve PR
+        run: gh pr review --approve "$PR_URL"
+        env:
+          PR_URL: ${{github.event.pull_request.html_url}}
+          GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
+      - name: Enable auto-merge
+        run: gh pr merge --auto --squash --delete-branch "$PR_URL"
+        env:
+          PR_URL: ${{github.event.pull_request.html_url}}
+          GH_TOKEN: ${{secrets.GITHUB_TOKEN}}

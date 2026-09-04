@@ -1,0 +1,11 @@
+# Flags declared by the act1 pack. Every flag referenced by this pack's content (Ink set_flag /
+# has_flag, staging when/unless, quest steps, activity on_complete, trigger set_flag/require_flag)
+# must appear in some pack's flags.yaml; the content-validation tests check the union.
+flags:
+  - act1.met_keeper        # spoke to the keeper in the yard
+  - act1.hedge_cleared     # match3 hedge in front of the hall door cleared
+  - act1.strongbox_opened  # lights-out strongbox opened (gave a brass token)
+  - act1.forged_sigil      # merge workbench produced the sigil
+  - act1.act_complete      # keeper accepted the sigil; act2 unlocked
+  - act1.rested            # sat on the bench (advances the day)
+  - act1.crossed_gate      # walked into the gate arch (fires the fade_beat cutscene)

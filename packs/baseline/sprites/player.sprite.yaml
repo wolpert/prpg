@@ -1,0 +1,9 @@
+# Player character sprites (data-driven; see docs/content-guide.md, Art).
+# Authored in packs/baseline/art/player.aseprite and packed by `./gradlew buildAtlases -Ppack=baseline`.
+# Animations resolve to atlas regions <region>_<state>_<direction>, e.g. player_walk_down.
+atlas: atlases/baseline.atlas
+region: player
+frameWidth: 48
+frameHeight: 48
+frameDuration: 0.12       # atlases carry no frame timing, so it is declared here
+flipRightForLeft: true    # LEFT is the RIGHT animation flipped horizontally

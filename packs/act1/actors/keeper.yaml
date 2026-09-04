@@ -1,0 +1,5 @@
+# The gatehouse keeper. Identity only: where they stand is per-act staging (staging/<act>.yaml).
+id: keeper
+name: Keeper
+sprite: npc            # sprites/npc.sprite.yaml in baseline; wins over `color`
+color: C06A2E          # swatch fallback if the atlas region is ever missing

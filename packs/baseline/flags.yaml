@@ -1,0 +1,8 @@
+# Flags declared by the baseline pack: persistent profile / cross-act state.
+#
+# Namespacing convention (keeps flags from colliding across packs / persistence tiers):
+#   act1.*, act2.*, ...  story flags scoped to an act (declared in that act's pack)
+#   meta.*               persistent profile state, preserved across a new game
+#
+# meta.owns.<actId> entitlement flags are set/read in code (DefaultEntitlement), not authored.
+flags: []

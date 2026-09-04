@@ -1,0 +1,70 @@
+# Act 1 staging: who and what is in the world during this act, and when.
+#
+# A map owns terrain, collision, spawn points, portals, named `markers` and immovable props;
+# everything act-scoped is placed here against a marker NAME, so re-laying-out a map never breaks
+# act content. Resolution rules: docs/content-guide.md, "Staging".
+act: act1
+
+cast:
+  # Story-early: the keeper waits in the yard.
+  - actor: keeper
+    at: { map: gatehouse_yard, marker: keeper_post }
+    dialogue: keeper_greeting
+  # Story-late: once the hedge is cleared the keeper is inside at the desk. Last matching entry wins.
+  - actor: keeper
+    at: { map: gatehouse_hall, marker: keeper_desk }
+    dialogue: keeper_inside
+    when: [act1.hedge_cleared]
+
+obstacles:
+  # A full-screen activity that physically bars the hall door until solved.
+  - id: hedge
+    at: { map: gatehouse_yard, marker: hall_door }
+    solid: true
+    activity: { type: match3, id: hedge }
+    cleared_when: act1.hedge_cleared      # same flag as the activity's on_complete.set_flag
+    color: 2E5A24
+
+  # A popup activity: the strongbox opens in a panel over the world.
+  - id: strongbox
+    at: { map: gatehouse_hall, marker: strongbox }
+    activity: { type: lightsout, id: strongbox }
+    cleared_when: act1.strongbox_opened
+    color: 6E4A2A
+  # ...and once opened, the same spot is plain furniture with a line of its own.
+  - id: strongbox_open
+    at: { map: gatehouse_hall, marker: strongbox }
+    dialogue: strongbox_empty
+    when: [act1.strongbox_opened]
+    color: 4A3A28
+
+  # A second full-screen activity type (merge) at the workbench.
+  - id: workbench
+    at: { map: gatehouse_hall, marker: workbench }
+    activity: { type: merge, id: token_forge }
+    when: [act1.strongbox_opened]
+    cleared_when: act1.forged_sigil
+    color: 9A6E44
+
+  # Scenery with dialogue only: resting advances the day (see bench_rest in ink/act1.ink).
+  - id: bench
+    at: { map: gatehouse_yard, marker: bench }
+    dialogue: bench_rest
+    color: 8A6038
+
+items:
+  # A pick-up lying in the world; the item id comes from baseline items/items.yaml.
+  - { itemId: travel_ration, at: { map: gatehouse_hall, marker: table } }
+
+triggers:
+  # A walk-in zone that sets a flag and runs the sample cutscene, once.
+  - id: gate_arch
+    at: { map: gatehouse_yard, marker: gate_arch }
+    require_flag: act1.met_keeper
+    set_flag: act1.crossed_gate
+    fire_once: true
+    event: fade_beat
+
+props:
+  # The notice board is drawn by the map (npcs layer); this act voices it with its own knot.
+  - { prop: notice_board, dialogue: notice_board }

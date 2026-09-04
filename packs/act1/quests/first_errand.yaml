@@ -1,0 +1,9 @@
+# A quest is pure derivation from flags: each step completes when its flag is set.
+id: first_errand
+title: "@quest.first_errand.title"     # an i18n key (baseline i18n/strings.properties) or a literal
+steps:
+  - { id: meet,   text: "Find the keeper in the yard.",        flag: act1.met_keeper }
+  - { id: hedge,  text: "Clear the hedge from the hall door.", flag: act1.hedge_cleared }
+  - { id: box,    text: "Open the strongbox in the hall.",     flag: act1.strongbox_opened }
+  - { id: forge,  text: "Forge the tokens into a sigil.",      flag: act1.forged_sigil }
+  - { id: report, text: "Bring the sigil to the keeper.",      flag: act1.act_complete }

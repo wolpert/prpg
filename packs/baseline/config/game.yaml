@@ -1,0 +1,8 @@
+# Engine tunables (see core/.../config/GameConfig for every field and its default).
+title: prpg
+player:
+  speed: 80              # world units (pixels) per second
+world:
+  viewWidth: 180         # minimum visible world size; the viewport extends to keep aspect
+  viewHeight: 320
+  sideGutterDp: 24       # left/right gutter so the map never runs to the screen edge (0 = edge to edge)

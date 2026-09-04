@@ -1,0 +1,16 @@
+# A match-3 board. The filename's base is the activity id staging refers to.
+id: hedge
+title: Clear the hedge
+board:
+  width: 6
+  height: 6
+  # Each piece is a bare name (palette swatch) or {name, color?, atlas?, region?} for real art.
+  pieces: [bramble, leaf, thorn]
+win:
+  per_type:            # cleared-count target per piece type; all must be met
+    bramble: 6
+    leaf: 6
+    thorn: 6
+on_complete:
+  set_flag: act1.hedge_cleared   # pairs with the obstacle's cleared_when
+  dialogue: hedge_cleared        # Ink knot barked when the world resumes (first time only)

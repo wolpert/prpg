@@ -1,0 +1,4 @@
+# An actor introduced by this act, so it lives in this pack rather than baseline.
+id: traveller
+name: Traveller
+color: 7A6E9B

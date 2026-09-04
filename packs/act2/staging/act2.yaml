@@ -1,0 +1,9 @@
+act: act2
+cast:
+  - actor: traveller
+    at: { map: road, marker: traveller_spot }
+    dialogue: traveller
+obstacles: []
+items: []
+triggers: []
+props: []

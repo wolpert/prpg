@@ -1,0 +1,24 @@
+# The act catalog, read at runtime by ActContentRegistry.
+#
+# Lists EVERY act, even DLC acts that aren't installed, so the base game can advertise a missing
+# act instead of dead-ending. A pack dropped in without a catalog entry still appears (its pack.yaml
+# `provides:` is merged at runtime); an entry here is only needed to advertise UNINSTALLED DLC.
+# The entry map/spawn come from each pack's provides:, so the catalog never has to know map names.
+#
+# `dlc:` groups packs into sales units (one purchase = N packs). See docs/content-guide.md.
+acts:
+  - id: act1
+    title: The Gatehouse
+    order: 1
+    source: BUNDLED
+    entitlement: FREE
+  - id: act2
+    title: The Road
+    order: 2
+    source: DLC
+    entitlement: PAID
+
+dlc:
+  - id: road-pack
+    entitlement: PAID
+    packs: [act2]

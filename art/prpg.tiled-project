@@ -1,0 +1,102 @@
+{
+    "automappingRulesFile": "",
+    "commands": [],
+    "compatibilityVersion": 1100,
+    "extensionsPath": "extensions",
+    "folders": [
+        "../packs"
+    ],
+    "properties": [],
+    "propertyTypes": [
+        {
+            "color": "#ff6b4a2b",
+            "drawFill": true,
+            "id": 1,
+            "members": [
+                { "name": "activityId", "type": "string", "value": "" },
+                { "name": "clearedFlag", "type": "string", "value": "" },
+                { "name": "color", "type": "string", "value": "" },
+                { "name": "type", "propertyType": "ActivityKind", "type": "string", "value": "match3" }
+            ],
+            "name": "Activity",
+            "type": "class",
+            "useAs": [ "property", "object" ]
+        },
+        {
+            "id": 2,
+            "name": "ActivityKind",
+            "storageType": "string",
+            "type": "enum",
+            "values": [ "match3", "merge", "lightsout" ],
+            "valuesAsFlags": false
+        },
+        {
+            "color": "#ffd8c9a0",
+            "drawFill": true,
+            "id": 3,
+            "members": [
+                { "name": "itemId", "type": "string", "value": "" }
+            ],
+            "name": "Item",
+            "type": "class",
+            "useAs": [ "property", "object" ]
+        },
+        {
+            "color": "#ffb388eb",
+            "drawFill": true,
+            "id": 4,
+            "members": [],
+            "name": "Marker",
+            "type": "class",
+            "useAs": [ "property", "object" ]
+        },
+        {
+            "color": "#ff5e8b7e",
+            "drawFill": true,
+            "id": 5,
+            "members": [
+                { "name": "color", "type": "string", "value": "" },
+                { "name": "dialogueId", "type": "string", "value": "" }
+            ],
+            "name": "NPC",
+            "type": "class",
+            "useAs": [ "property", "object" ]
+        },
+        {
+            "color": "#ff7aa8ff",
+            "drawFill": true,
+            "id": 6,
+            "members": [
+                { "name": "require_flag", "type": "string", "value": "" },
+                { "name": "target_map", "type": "string", "value": "" },
+                { "name": "target_spawn", "type": "string", "value": "" }
+            ],
+            "name": "Portal",
+            "type": "class",
+            "useAs": [ "property", "object" ]
+        },
+        {
+            "color": "#ffe0c060",
+            "drawFill": true,
+            "id": 7,
+            "members": [],
+            "name": "Spawn",
+            "type": "class",
+            "useAs": [ "property", "object" ]
+        },
+        {
+            "color": "#ff3aa0c0",
+            "drawFill": true,
+            "id": 8,
+            "members": [
+                { "name": "event", "type": "string", "value": "" },
+                { "name": "fire_once", "type": "bool", "value": false },
+                { "name": "require_flag", "type": "string", "value": "" },
+                { "name": "set_flag", "type": "string", "value": "" }
+            ],
+            "name": "Trigger",
+            "type": "class",
+            "useAs": [ "property", "object" ]
+        }
+    ]
+}

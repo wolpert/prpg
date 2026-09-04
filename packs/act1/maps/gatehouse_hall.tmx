@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="14" height="11" tilewidth="16" tileheight="16" infinite="0" nextlayerid="11" nextobjectid="100">
+ <tileset firstgid="1" source="../../baseline/tilesets/basic.tsx"/>
+ <layer id="1" name="ground" width="14" height="11">
+  <data encoding="csv">
+16,16,16,16,16,16,16,16,16,16,16,16,16,16,
+16,15,15,15,15,15,15,15,15,15,15,15,15,16,
+16,15,15,15,15,15,15,15,15,15,15,15,15,16,
+16,15,15,15,15,15,15,15,15,15,15,15,15,16,
+16,15,15,15,15,15,15,15,15,15,15,15,15,16,
+16,15,15,15,15,29,29,29,29,29,15,15,15,16,
+16,15,15,15,15,15,15,15,15,15,15,15,15,16,
+16,15,15,15,15,15,15,15,15,15,15,15,15,16,
+16,15,15,15,15,15,15,15,15,15,15,15,15,16,
+16,15,15,15,15,15,15,15,15,15,15,15,15,16,
+16,16,16,16,16,16,16,16,16,16,16,16,16,16
+  </data>
+ </layer>
+ <layer id="2" name="walls" width="14" height="11">
+  <data encoding="csv">
+10,10,10,10,12,10,10,10,10,12,10,10,10,10,
+9,0,23,0,0,0,0,0,0,0,0,0,0,9,
+9,0,0,0,0,0,0,0,0,0,0,0,0,9,
+9,0,0,0,0,0,0,25,0,0,0,0,0,9,
+9,0,0,0,0,0,0,0,0,0,0,0,0,9,
+9,0,0,0,0,0,0,0,0,0,0,0,0,9,
+9,0,0,0,0,0,0,0,0,0,0,0,0,9,
+9,0,0,0,0,0,0,0,0,0,0,0,0,9,
+9,0,30,0,0,0,0,0,0,0,0,24,0,9,
+9,0,0,0,0,0,0,0,0,0,0,0,0,9,
+9,9,9,9,9,9,9,13,9,9,9,9,9,9
+  </data>
+ </layer>
+ <layer id="3" name="collision" width="14" height="11" visible="0">
+  <data encoding="csv">
+1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+1,0,1,0,0,0,0,0,0,0,0,0,0,1,
+1,0,0,0,0,0,0,0,0,0,0,0,0,1,
+1,0,0,0,0,0,0,1,0,0,0,0,0,1,
+1,0,0,0,0,0,0,0,0,0,0,0,0,1,
+1,0,0,0,0,0,0,0,0,0,0,0,0,1,
+1,0,0,0,0,0,0,0,0,0,0,0,0,1,
+1,0,0,0,0,0,0,0,0,0,0,0,0,1,
+1,0,1,0,0,0,0,0,0,0,0,1,0,1,
+1,0,0,0,0,0,0,0,0,0,0,0,0,1,
+1,1,1,1,1,1,1,0,1,1,1,1,1,1
+  </data>
+ </layer>
+ <objectgroup id="4" name="spawn">
+  <object id="1" name="from_yard" type="Spawn" x="112" y="144" width="16" height="16"/>
+ </objectgroup>
+ <objectgroup id="5" name="portals">
+  <object id="2" name="yard_door" type="Portal" x="112" y="160" width="16" height="16">
+   <properties>
+    <property name="target_map" value="gatehouse_yard"/>
+    <property name="target_spawn" value="from_hall"/>
+   </properties>
+  </object>
+ </objectgroup>
+ <objectgroup id="6" name="npcs">
+  <object id="3" name="notice_board" type="NPC" x="32" y="16" width="16" height="16">
+   <properties>
+    <property name="dialogueId" value="notice_board"/>
+    <property name="color" value="C9A26A"/>
+   </properties>
+  </object>
+ </objectgroup>
+ <objectgroup id="7" name="items"/>
+ <objectgroup id="8" name="activities"/>
+ <objectgroup id="9" name="triggers"/>
+ <objectgroup id="10" name="markers">
+  <object id="10" name="keeper_desk" type="Marker" x="112" y="64" width="16" height="16"/>
+  <object id="11" name="strongbox" type="Marker" x="48" y="48" width="16" height="16"/>
+  <object id="12" name="workbench" type="Marker" x="160" y="48" width="16" height="16"/>
+  <object id="13" name="table" type="Marker" x="112" y="96" width="16" height="16"/>
+ </objectgroup>
+</map>

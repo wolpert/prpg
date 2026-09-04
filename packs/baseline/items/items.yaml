@@ -1,0 +1,18 @@
+# The item catalog. Items live in baseline (not an act pack) because inventory outlives any act.
+# `color` is the placeholder swatch drawn until real art lands.
+items:
+  - id: brass_token
+    name: Brass Token
+    description: "A worn disc stamped with the gatehouse mark. Two of these forge into something more."
+    color: C9A24B
+    stackable: true
+  - id: sigil
+    name: Gatehouse Sigil
+    description: "Four tokens folded into one seal. It opens the road."
+    color: B23A48
+    stackable: false
+  - id: travel_ration
+    name: Travel Ration
+    description: "Hard bread, harder cheese."
+    color: D8C9A0
+    stackable: true

@@ -1,0 +1,7 @@
+# Copy to local.properties (gitignored) and fill in what you have.
+
+# Android SDK root (only needed for the android module).
+sdk.dir=/home/you/Android/Sdk
+
+# Aseprite CLI binary, for buildAtlases / genCharacterAseprites (~ is expanded).
+aseprite.bin=~/Aseprite/aseprite

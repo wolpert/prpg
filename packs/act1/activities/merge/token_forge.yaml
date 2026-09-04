@@ -1,0 +1,17 @@
+# A merge ladder: drag two of the same tile together to make the next tier.
+id: token_forge
+title: Forge the sigil
+hint: Drag two matching tokens together. Two rank-2 tokens make the sigil.
+width: 4
+height: 4
+ladder:
+  - { id: token_1, color: C9A24B, tier: 1 }
+  - { id: token_2, color: E0B84A, tier: 2, from: [token_1, token_1] }
+  - { id: sigil,   color: B23A48, tier: 3, from: [token_2, token_2] }
+starting_inventory:
+  token_1: 4
+win: { produce: sigil, count: 1 }
+on_complete:
+  give_item: sigil
+  set_flag: act1.forged_sigil    # REQUIRED alongside give_item, or the reward repeats
+  dialogue: sigil_forged

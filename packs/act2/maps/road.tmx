@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="20" height="8" tilewidth="16" tileheight="16" infinite="0" nextlayerid="11" nextobjectid="100">
+ <tileset firstgid="1" source="../../baseline/tilesets/basic.tsx"/>
+ <layer id="1" name="ground" width="20" height="8">
+  <data encoding="csv">
+2,1,1,1,2,1,1,1,2,1,1,1,2,1,1,1,2,1,1,1,
+1,1,1,2,1,1,1,2,1,1,1,2,1,1,1,2,1,1,1,2,
+1,1,2,1,1,1,2,1,1,1,2,1,1,1,2,1,1,1,2,1,
+4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+1,1,1,2,1,1,1,2,1,1,1,2,1,1,1,2,1,1,1,2,
+1,1,2,1,1,1,2,1,1,1,2,1,1,1,2,1,1,1,2,1,
+1,2,1,1,1,2,1,1,1,2,1,1,1,2,1,1,1,2,1,1
+  </data>
+ </layer>
+ <layer id="2" name="walls" width="20" height="8">
+  <data encoding="csv">
+20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,
+21,0,0,0,0,17,0,0,0,0,0,0,0,0,0,0,0,0,0,21,
+21,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,21,
+21,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,21,
+21,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,21,
+21,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,21,
+21,0,0,0,0,0,0,0,0,17,0,0,0,0,17,0,0,0,0,21,
+20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20
+  </data>
+ </layer>
+ <layer id="3" name="collision" width="20" height="8" visible="0">
+  <data encoding="csv">
+1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+1,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,
+1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+  </data>
+ </layer>
+ <objectgroup id="4" name="spawn">
+  <object id="1" name="start" type="Spawn" x="32" y="64" width="16" height="16"/>
+ </objectgroup>
+ <objectgroup id="5" name="portals"/>
+ <objectgroup id="6" name="npcs"/>
+ <objectgroup id="7" name="items"/>
+ <objectgroup id="8" name="activities"/>
+ <objectgroup id="9" name="triggers"/>
+ <objectgroup id="10" name="markers">
+  <object id="10" name="traveller_spot" type="Marker" x="192" y="48" width="16" height="16"/>
+ </objectgroup>
+</map>

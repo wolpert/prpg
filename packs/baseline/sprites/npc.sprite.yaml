@@ -1,0 +1,7 @@
+# A generic NPC sprite any actor can use via `sprite: npc` in its actors/<id>.yaml.
+atlas: atlases/baseline.atlas
+region: npc
+frameWidth: 48
+frameHeight: 48
+frameDuration: 0.14
+flipRightForLeft: true
