@@ -41,6 +41,9 @@ dependencies {
 }
 
 // Load Mockito as an explicit JVM agent so it doesn't self-attach (deprecated on JDK 21+).
+// Both test tasks below pair the agent with -Xshare:off: appending to the bootstrap classpath
+// makes the JVM print a class-data-sharing notice on every run, and CDS buys these short
+// headless tests nothing.
 val mockitoAgent: Configuration = configurations.create("mockitoAgent")
 dependencies {
     mockitoAgent(libs.mockito.core) { isTransitive = false }
@@ -48,7 +51,7 @@ dependencies {
 
 tasks.named<Test>("test") {
     useJUnitPlatform()
-    jvmArgs("-javaagent:${mockitoAgent.asPath}")
+    jvmArgs("-javaagent:${mockitoAgent.asPath}", "-Xshare:off")
 }
 
 // The content guard rails, runnable in isolation as the pre-ship gate (root validatePacks /
@@ -60,7 +63,7 @@ tasks.register<Test>("validateContent") {
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform()
-    jvmArgs("-javaagent:${mockitoAgent.asPath}")
+    jvmArgs("-javaagent:${mockitoAgent.asPath}", "-Xshare:off")
     filter {
         includeTestsMatching("*ContentValidationTest")
         includeTestsMatching("*InkContentValidationTest")

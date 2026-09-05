@@ -756,6 +756,11 @@ public class WorldScreen implements Screen {
         }
     }
 
+    // Identity is the point: animation(dirIdx, moving) hands back one cached Animation per
+    // (direction, moving) pair, so a different instance means the clip actually changed and the
+    // elapsed timer has to restart. Animation has no equals(), so value comparison would be
+    // identity anyway, just less honest about the intent.
+    @SuppressWarnings("ReferenceEquality")
     private void updatePlayerAnimation() {
         if (playerEntity == null) return;
 

@@ -27,7 +27,6 @@ public class InventoryOverlay {
 
     private final Inventory inventory;
     private final ItemRegistry registry;
-    private final Skin skin;
     private final Fonts fonts;
     private final Strings strings;
 
@@ -44,7 +43,6 @@ public class InventoryOverlay {
                             Strings strings, SpriteBatch batch) {
         this.inventory = inventory;
         this.registry = registry;
-        this.skin = skin;
         this.fonts = fonts;
         this.strings = strings;
 

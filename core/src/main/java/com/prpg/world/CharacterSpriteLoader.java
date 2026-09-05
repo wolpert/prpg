@@ -26,7 +26,6 @@ import javax.inject.Singleton;
 public class CharacterSpriteLoader implements Disposable {
 
     private static final int DIRS = 4; // index: 0=DOWN, 1=UP, 2=RIGHT, 3=LEFT
-    private static final String[] DIR_SUFFIX = {"down", "up", "right"}; // LEFT derived from RIGHT
     private static final int IDX_DOWN = 0, IDX_UP = 1, IDX_RIGHT = 2, IDX_LEFT = 3;
 
     private final ContentResolver content;

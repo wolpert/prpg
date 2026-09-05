@@ -19,7 +19,6 @@ import javax.inject.Singleton;
 public class QuestLogOverlay {
 
     private final QuestLog questLog;
-    private final Skin skin;
     private final Fonts fonts;
     private final Strings strings;
 
@@ -32,7 +31,6 @@ public class QuestLogOverlay {
     public QuestLogOverlay(QuestLog questLog, Skin skin, Fonts fonts, Strings strings,
                            SpriteBatch batch) {
         this.questLog = questLog;
-        this.skin = skin;
         this.fonts = fonts;
         this.strings = strings;
 

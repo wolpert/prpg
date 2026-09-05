@@ -5,6 +5,7 @@ import com.badlogic.gdx.maps.MapLayer;
 import com.badlogic.gdx.maps.MapObject;
 import com.badlogic.gdx.maps.MapObjects;
 import com.badlogic.gdx.maps.objects.RectangleMapObject;
+import com.badlogic.gdx.maps.tiled.BaseTiledMapLoader;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.maps.tiled.TmxMapLoader;
@@ -37,7 +38,7 @@ public class MapManager {
     // seam rather than the default internal resolver, so a mounted pack's maps load the same way.
     private final TmxMapLoader loader;
     // Force Nearest filtering on tileset textures so tiles stay crisp under the stretched viewport.
-    private final TmxMapLoader.Parameters loaderParams = nearestParams();
+    private final BaseTiledMapLoader.Parameters loaderParams = nearestParams();
     private final Map<String, Vector2> savedPositions = new HashMap<>();
     /**
      * Runtime blockers contributed by staged content (an obstacle barring a doorway, a character who
@@ -62,8 +63,8 @@ public class MapManager {
         this.loader = new TmxMapLoader(content.fileHandleResolver());
     }
 
-    private static TmxMapLoader.Parameters nearestParams() {
-        TmxMapLoader.Parameters p = new TmxMapLoader.Parameters();
+    private static BaseTiledMapLoader.Parameters nearestParams() {
+        BaseTiledMapLoader.Parameters p = new BaseTiledMapLoader.Parameters();
         p.textureMinFilter = Texture.TextureFilter.Nearest;
         p.textureMagFilter = Texture.TextureFilter.Nearest;
         return p;

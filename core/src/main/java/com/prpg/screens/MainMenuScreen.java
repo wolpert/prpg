@@ -106,11 +106,11 @@ public class MainMenuScreen extends BaseScreen {
             }
         };
         dialog.text("Are you sure you want to quit?");
-        dialog.button("Yes", Boolean.TRUE);
-        dialog.button("No", Boolean.FALSE);
-        dialog.key(Input.Keys.ENTER, Boolean.TRUE);
-        dialog.key(Input.Keys.ESCAPE, Boolean.FALSE);
-        dialog.key(Input.Keys.BACK, Boolean.FALSE);
+        dialog.button("Yes", true);
+        dialog.button("No", false);
+        dialog.key(Input.Keys.ENTER, true);
+        dialog.key(Input.Keys.ESCAPE, false);
+        dialog.key(Input.Keys.BACK, false);
         dialog.show(stage);
     }
 }
