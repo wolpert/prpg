@@ -11,7 +11,7 @@ graalHelper = "2.0.1"
 dagger = "2.60.1"
 
 # Config / serialization
-snakeYaml = "2.6"
+snakeYaml = "2.7"
 
 # Narrative (inkle Ink; bladecoder Java port. Runtime + build-time compiler share one version, and
 # buildSrc/build.gradle.kts spells the same version out because it cannot see this catalog.)
@@ -25,7 +25,7 @@ mockito = "5.23.0"
 lwjgl3 = "3.4.3"
 
 # Android
-agp = "9.3.2"
+agp = "9.4.0"
 desugar = "2.1.5"
 androidCompileSdk = "36"
 androidTargetSdk = "35"
@@ -36,9 +36,9 @@ construo = "2.2.2"
 # foojay-resolver-convention is applied in settings.gradle.kts where the type-safe `libs` accessor
 # is not available. The version literal in settings.gradle.kts MUST be kept in sync with this entry.
 foojayResolver = "1.0.0"
-graalNative = "1.1.10"
-spotless = "8.10.0"
-errorprone = "5.1.0"
+graalNative = "1.1.11"
+spotless = "8.10.1"
+errorprone = "5.1.1"
 errorproneCore = "2.50.0"
 
 [libraries]
