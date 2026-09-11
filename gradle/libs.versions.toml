@@ -36,8 +36,8 @@ construo = "2.2.2"
 # foojay-resolver-convention is applied in settings.gradle.kts where the type-safe `libs` accessor
 # is not available. The version literal in settings.gradle.kts MUST be kept in sync with this entry.
 foojayResolver = "1.0.0"
-graalNative = "1.1.11"
-spotless = "8.10.1"
+graalNative = "1.1.12"
+spotless = "8.10.2"
 errorprone = "5.1.1"
 errorproneCore = "2.50.0"
 
