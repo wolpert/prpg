@@ -38,7 +38,6 @@ public abstract class BasePopupActivity implements PopupActivity {
     protected final ColorTextures colorTextures;
     protected final ConfigLoader configLoader;
     protected final ContentResolver content;
-    protected final OnCompleteApplier onComplete;
 
     protected final Stage stage;
     protected final GridLayout grid = new GridLayout();
@@ -49,22 +48,20 @@ public abstract class BasePopupActivity implements PopupActivity {
     private final Table body;
     private final Label hintLabel;
 
-    protected String pendingDialogue;
     protected String activityId;
 
     private boolean open;
+    private boolean solved;
     private float winPauseTimer;
     private boolean winPausing;
 
     protected BasePopupActivity(SpriteBatch batch, Skin skin, Fonts fonts, ColorTextures colorTextures,
-                                ConfigLoader configLoader, ContentResolver content,
-                                OnCompleteApplier onComplete) {
+                                ConfigLoader configLoader, ContentResolver content) {
         this.skin = skin;
         this.fonts = fonts;
         this.colorTextures = colorTextures;
         this.configLoader = configLoader;
         this.content = content;
-        this.onComplete = onComplete;
 
         ScreenViewport viewport = new ScreenViewport();
         viewport.setUnitsPerPixel(1f / Gdx.graphics.getDensity());
@@ -118,9 +115,13 @@ public abstract class BasePopupActivity implements PopupActivity {
         });
     }
 
-    /** Loads an activity definition POJO from {@code activities/<type>/<activityId>.yaml}. */
+    /**
+     * Loads an activity definition POJO from {@code activities/<type>/<activityId>.yaml}. Every
+     * {@code launch} calls this first, so it also starts a fresh run.
+     */
     protected <T> T loadDefinition(String type, Class<T> defType, String activityId) {
         this.activityId = activityId;
+        this.solved = false;
         String path = "activities/" + type + "/" + activityId + ".yaml";
         try (Reader reader = content.resolve(path).reader()) {
             T def = configLoader.load(defType, reader);
@@ -232,10 +233,18 @@ public abstract class BasePopupActivity implements PopupActivity {
     }
 
     @Override
-    public String consumePendingDialogue() {
-        String d = pendingDialogue;
-        pendingDialogue = null;
-        return d;
+    public boolean isRunning() {
+        return open;
+    }
+
+    @Override
+    public boolean wasWon() {
+        return solved;
+    }
+
+    /** Records the solve; the story reads it once the popup closes. */
+    protected void markWon() {
+        solved = true;
     }
 
     @Override

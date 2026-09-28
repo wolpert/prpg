@@ -1,70 +1,68 @@
 package com.prpg.quests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
-import com.prpg.config.ConfigLoader;
-import com.prpg.content.ContentResolver;
-import com.prpg.quests.config.QuestDefinition;
-import com.prpg.quests.config.QuestDefinition.QuestStep;
-import com.prpg.world.FlagStore;
+import com.prpg.items.Inventory;
+import com.prpg.narrative.InkTestSupport;
+import com.prpg.narrative.NarrativeRunner;
+import com.prpg.narrative.NarrativeState;
+import com.prpg.narrative.StoryVariables;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+/** The journal is the current act's Ink {@code journal()} evaluated against story state. */
 class QuestLogTest {
 
-    private FlagStore flags;
+    private StoryVariables vars;
+    private NarrativeState state;
     private QuestLog log;
 
     @BeforeEach
     void setUp() {
-        flags = new FlagStore();
-        // state()/prerequisitesMet() operate on passed-in definitions, so loaders can be mocks.
-        log = new QuestLog(mock(ConfigLoader.class), mock(ContentResolver.class), flags);
+        vars = new StoryVariables();
+        state = new NarrativeState();
+        state.setCurrentActId("act1");
+        NarrativeRunner runner = InkTestSupport.runner(InkTestSupport.sourceFor("act1", "act2"), state,
+                vars, mock(Inventory.class), id -> true);
+        log = new QuestLog(runner, state);
     }
 
-    private static QuestDefinition quest(String... stepFlags) {
-        QuestDefinition q = new QuestDefinition();
-        q.id = "q";
-        q.steps = new java.util.ArrayList<>();
-        for (String f : stepFlags) {
-            QuestStep s = new QuestStep();
-            s.flag = f;
-            q.steps.add(s);
+    @Test
+    void theActsJournalReadsFromStoryState() {
+        List<QuestLog.Quest> quests = log.quests();
+        assertEquals(1, quests.size());
+        QuestLog.Quest errand = quests.get(0);
+        assertEquals("@quest.first_errand.title", errand.title());
+        assertEquals(5, errand.steps().size());
+        assertEquals(0, errand.currentStepIndex());
+        assertFalse(errand.isComplete());
+
+        vars.set("met_keeper", true);
+        vars.set("hedge_cleared", true);
+        QuestLog.Quest later = log.quests().get(0);
+        assertEquals(2, later.currentStepIndex(), "steps tick as the story's variables change");
+        assertTrue(later.steps().get(0).done());
+    }
+
+    @Test
+    void aQuestIsCompleteWhenEveryStepIsDone() {
+        for (String v : List.of("met_keeper", "hedge_cleared", "strongbox_opened", "forged_sigil", "act1_complete")) {
+            vars.set(v, true);
         }
-        return q;
+        QuestLog.Quest errand = log.quests().get(0);
+        assertTrue(errand.isComplete());
+        assertEquals(5, errand.currentStepIndex());
     }
 
     @Test
-    void lockedUntilPrerequisitesMet() {
-        QuestDefinition q = quest("a2.step_one");
-        q.requires = List.of("a1.saw_margaret");
-
-        assertEquals(QuestLog.State.LOCKED, log.state(q));
-        flags.setFlag("a1.saw_margaret");
-        assertEquals(QuestLog.State.ACTIVE, log.state(q));
-    }
-
-    @Test
-    void activeThenCompleteAsStepsFlip() {
-        QuestDefinition q = quest("a1.read_will", "a1.met_elder");
-        assertEquals(QuestLog.State.ACTIVE, log.state(q));
-        assertEquals(0, log.currentStepIndex(q));
-
-        flags.setFlag("a1.read_will");
-        assertEquals(1, log.currentStepIndex(q));
-        assertEquals(QuestLog.State.ACTIVE, log.state(q));
-
-        flags.setFlag("a1.met_elder");
-        assertEquals(QuestLog.State.COMPLETE, log.state(q));
-    }
-
-    @Test
-    void completeFlagShortCircuitsSteps() {
-        QuestDefinition q = quest("a1.read_will", "a1.met_elder");
-        q.complete_flag = "a1.saw_margaret";
-        flags.setFlag("a1.saw_margaret");
-        assertEquals(QuestLog.State.COMPLETE, log.state(q));
+    void theJournalFollowsTheCurrentAct() {
+        state.setCurrentActId("act2");
+        assertEquals("The road", log.quests().get(0).title());
+        state.setCurrentActId("act9");
+        assertTrue(log.quests().isEmpty(), "an act that isn't installed has no journal");
     }
 }

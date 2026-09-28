@@ -11,11 +11,10 @@ import javax.inject.Singleton;
  * per-act) and of libGDX, so it serializes on its own (see {@code save/SaveData}) and is unit-testable
  * headless.
  *
- * <p>Ink stories are ephemeral: each act reads from and writes to this model, the {@code FlagStore}
- * and the {@code Inventory} through {@link StateBridge}. That is what lets any act, base or DLC, run
- * standalone with state handed in. Everything else a story needs to remember belongs in
- * {@code FlagStore} (flags and int counters), which is also saved; add fields here only for state
- * that genuinely needs Java-typed structure.
+ * <p>Everything a story needs to remember is an Ink variable (kept by name in
+ * {@link StoryVariables}); this model holds only the act spine, which Ink reaches through
+ * {@link StateBridge} ({@code unlock_act}, {@code advance_act}, {@code current_act}). Add fields here
+ * only for state that genuinely needs Java-typed structure.
  *
  * <p>{@link #getCurrentActId()} is null until a game starts ({@code ActProgression.beginNewGame()}
  * or a save load sets it) because the first act is data, not a constant.

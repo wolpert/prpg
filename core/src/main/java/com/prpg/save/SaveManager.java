@@ -7,20 +7,19 @@ import com.prpg.content.ContentRoot;
 import com.prpg.items.Inventory;
 import com.prpg.narrative.NarrativeRunner;
 import com.prpg.narrative.NarrativeState;
+import com.prpg.narrative.StoryVariables;
 import com.prpg.narrative.content.ActContentRegistry;
 import com.prpg.util.Log;
-import com.prpg.world.FlagStore;
 import com.prpg.world.GameClock;
-import com.prpg.world.TriggerHistory;
 import com.prpg.world.stage.StageDirector;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
@@ -34,10 +33,11 @@ public class SaveManager {
 
     public static final String SAVE_FILE = "save.json";
 
+    private static final Pattern COMMA = Pattern.compile(",");
+
     private final ContentRoot root;
     private final Inventory inventory;
-    private final FlagStore flagStore;
-    private final TriggerHistory triggerHistory;
+    private final StoryVariables variables;
     private final GameClock clock;
     private final NarrativeState narrativeState;
     private final NarrativeRunner narrativeRunner;
@@ -53,14 +53,12 @@ public class SaveManager {
     });
 
     @Inject
-    public SaveManager(ContentRoot root, Inventory inventory, FlagStore flagStore,
-                       TriggerHistory triggerHistory, GameClock clock, NarrativeState narrativeState,
-                       NarrativeRunner narrativeRunner, StageDirector stageDirector,
-                       ActContentRegistry acts) {
+    public SaveManager(ContentRoot root, Inventory inventory, StoryVariables variables, GameClock clock,
+                       NarrativeState narrativeState, NarrativeRunner narrativeRunner,
+                       StageDirector stageDirector, ActContentRegistry acts) {
         this.root = root;
         this.inventory = inventory;
-        this.flagStore = flagStore;
-        this.triggerHistory = triggerHistory;
+        this.variables = variables;
         this.clock = clock;
         this.narrativeState = narrativeState;
         this.narrativeRunner = narrativeRunner;
@@ -76,10 +74,11 @@ public class SaveManager {
     public static Json createJson() {
         Json json = new Json();
         json.setOutputType(JsonWriter.OutputType.json);
-        json.setElementType(SaveData.class, "flags", SaveData.Entry.class);
+        // An older schema's fields must not make the file unreadable: migrate() needs its version.
+        json.setIgnoreUnknownFields(true);
+        json.setElementType(SaveData.class, "variables", SaveData.Variable.class);
         json.setElementType(SaveData.class, "inventory", SaveData.Entry.class);
-        json.setElementType(SaveData.class, "triggerHistory", String.class);
-        json.setElementType(SaveData.class, "staged", SaveData.StagedOverride.class);
+        json.setElementType(SaveData.Variable.class, "origins", String.class);
         json.setElementType(SaveData.Narrative.class, "unlockedActs", String.class);
         json.setElementType(SaveData.Narrative.class, "inkActStates", SaveData.ActState.class);
         return json;
@@ -97,7 +96,7 @@ public class SaveManager {
         String json = serialize(mapId, playerX, playerY, facing);
         try {
             saveFile().writeString(json, false);
-            Log.debug("SaveManager", "wrote save (map=" + mapId + ", day=" + clock.getDay() + ", async=false)");
+            Log.debug("SaveManager", "wrote save (map=" + mapId + ", async=false)");
             return true;
         } catch (Exception e) {
             Log.error("SaveManager", "save failed for map " + mapId, e);
@@ -111,12 +110,11 @@ public class SaveManager {
      */
     public void saveAsync(String mapId, float playerX, float playerY, String facing) {
         String json = serialize(mapId, playerX, playerY, facing);
-        int day = clock.getDay();
         FileHandle file = saveFile();
         var unused = writeExecutor.submit(() -> {
             try {
                 file.writeString(json, false);
-                Log.debug("SaveManager", "wrote save (map=" + mapId + ", day=" + day + ", async=true)");
+                Log.debug("SaveManager", "wrote save (map=" + mapId + ", async=true)");
             } catch (Exception e) {
                 Log.error("SaveManager", "async save failed for map " + mapId, e);
             }
@@ -131,11 +129,11 @@ public class SaveManager {
         data.playerY = playerY;
         data.facing = facing;
         clock.setLastPlayedMillis(System.currentTimeMillis());
-        data.day = clock.getDay();
         data.lastPlayedMillis = clock.getLastPlayedMillis();
 
-        for (Map.Entry<String, Integer> e : flagStore.getAll().entrySet()) {
-            data.flags.add(new SaveData.Entry(e.getKey(), e.getValue()));
+        for (Map.Entry<String, Object> e : variables.all().entrySet()) {
+            SaveData.Variable v = toSaved(e.getKey(), e.getValue());
+            if (v != null) data.variables.add(v);
         }
         // Sum inventory slots per item id (Inventory.add rebuilds slots on load).
         Map<String, Integer> counts = new LinkedHashMap<>();
@@ -145,7 +143,6 @@ public class SaveManager {
         for (Map.Entry<String, Integer> e : counts.entrySet()) {
             data.inventory.add(new SaveData.Entry(e.getKey(), e.getValue()));
         }
-        data.triggerHistory.addAll(triggerHistory.getFired());
 
         SaveData.Narrative n = data.narrative;
         n.currentAct = narrativeState.getCurrentActId();
@@ -157,24 +154,14 @@ public class SaveManager {
             n.inkActStates.add(as);
         }
 
-        data.stagedAct = stageDirector.currentActId();
-        for (StageDirector.StagedOverride o : stageDirector.overrides()) {
-            SaveData.StagedOverride so = new SaveData.StagedOverride();
-            so.id = o.id;
-            so.removed = o.removed;
-            so.mapId = o.mapId;
-            so.marker = o.marker;
-            so.dialogue = o.dialogue;
-            so.solid = o.solid;
-            data.staged.add(so);
-        }
 
         return createJson().toJson(data);
     }
 
     /**
-     * Reads the save file, applies inventory/flags/trigger-history/narrative/staging, and returns the
-     * data. Returns null (so callers fall back to a new game) if the file is missing or corrupt.
+     * Reads the save file, applies story variables, inventory and the act spine, and returns the data.
+     * Returns null (so callers fall back to a new game) if the file is missing, corrupt, or from an
+     * older schema this build no longer reads.
      */
     public SaveData load() {
         FileHandle file = saveFile();
@@ -193,21 +180,21 @@ public class SaveManager {
         }
 
         data = migrate(data);
+        if (data == null) return null;
 
-        Map<String, Integer> flags = new LinkedHashMap<>();
-        for (SaveData.Entry e : data.flags) flags.put(e.key, e.value);
-        flagStore.loadAll(flags);
-
-        Set<String> fired = new HashSet<>(data.triggerHistory);
-        triggerHistory.loadAll(fired);
+        Map<String, Object> loaded = new LinkedHashMap<>();
+        for (SaveData.Variable v : data.variables) {
+            Object value = fromSaved(v);
+            if (value != null) loaded.put(v.name, value);
+        }
+        variables.loadAll(loaded);
 
         inventory.clear();
         for (SaveData.Entry e : data.inventory) inventory.add(e.key, e.value);
 
-        clock.setDay(data.day);
         clock.setLastPlayedMillis(data.lastPlayedMillis);
 
-        // Restore the canonical narrative model, then re-seed the (ephemeral) Ink stories.
+        // Restore the act spine, then re-seed the Ink stories' own bookkeeping (visit counts).
         SaveData.Narrative n = data.narrative != null ? data.narrative : new SaveData.Narrative();
         narrativeState.reset();
         String current = n.currentAct != null ? n.currentAct : acts.firstActId();
@@ -218,37 +205,81 @@ public class SaveManager {
         for (SaveData.ActState as : n.inkActStates) {
             narrativeRunner.restoreActState(as.actId, as.stateJson);
         }
-
-        // Stage the saved act (re-reading its declarative rules), then lay the saved overrides on top.
-        stageDirector.enterAct(data.stagedAct != null ? data.stagedAct : current);
-        List<StageDirector.StagedOverride> overrides = new ArrayList<>();
-        for (SaveData.StagedOverride so : data.staged) {
-            StageDirector.StagedOverride o = new StageDirector.StagedOverride(so.id);
-            o.removed = so.removed;
-            o.mapId = so.mapId;
-            o.marker = so.marker;
-            o.dialogue = so.dialogue;
-            o.solid = so.solid;
-            overrides.add(o);
-        }
-        stageDirector.restoreOverrides(overrides);
+        stageDirector.invalidate();
 
         return data;
     }
 
     /**
-     * Upgrades a loaded save to the current schema. Add stepwise migrations keyed on
-     * {@code data.version} as the schema evolves; a missing field deserializes to its default, which
-     * is often already the right migration.
+     * Upgrades a loaded save to the current schema, or returns null to discard it. Add stepwise
+     * migrations keyed on {@code data.version} as the schema evolves; a missing field deserializes to
+     * its default, which is often already the right migration.
      */
     private SaveData migrate(SaveData data) {
-        if (data.version < SaveData.CURRENT_VERSION) {
-            data.version = SaveData.CURRENT_VERSION;
-        } else if (data.version > SaveData.CURRENT_VERSION) {
+        if (data.version < 2) {
+            // Version 1 kept flags, trigger history and staging overrides, none of which exist now
+            // that story state lives in Ink variables. There is no faithful translation.
+            Log.info("SaveManager", "discarding save version " + data.version
+                    + " (pre-Ink-state schema); starting a new game");
+            return null;
+        }
+        if (data.version > SaveData.CURRENT_VERSION) {
             Log.info("SaveManager", "save version " + data.version + " is newer than supported "
                     + SaveData.CURRENT_VERSION + "; loading best-effort");
         }
         return data;
+    }
+
+    // --- story variable (de)serialization --------------------------------------------------------
+
+    static SaveData.Variable toSaved(String name, Object value) {
+        SaveData.Variable v = new SaveData.Variable();
+        v.name = name;
+        if (value instanceof Boolean b) {
+            v.type = "bool";
+            v.value = String.valueOf(b);
+        } else if (value instanceof Integer i) {
+            v.type = "int";
+            v.value = String.valueOf(i);
+        } else if (value instanceof Float f) {
+            v.type = "float";
+            v.value = String.valueOf(f);
+        } else if (value instanceof String str) {
+            v.type = "string";
+            v.value = str;
+        } else if (value instanceof StoryVariables.ListValue list) {
+            v.type = "list";
+            v.value = String.join(",", list.items());
+            v.origins.addAll(list.origins());
+        } else {
+            Log.info("SaveManager", "not saving story variable '" + name + "' of unsupported type "
+                    + (value == null ? "null" : value.getClass().getSimpleName()));
+            return null;
+        }
+        return v;
+    }
+
+    static Object fromSaved(SaveData.Variable v) {
+        if (v == null || v.name == null || v.type == null) return null;
+        String raw = v.value == null ? "" : v.value;
+        try {
+            return switch (v.type) {
+                case "bool" -> Boolean.parseBoolean(raw);
+                case "int" -> Integer.parseInt(raw);
+                case "float" -> Float.parseFloat(raw);
+                case "string" -> raw;
+                case "list" -> new StoryVariables.ListValue(
+                        v.origins != null ? v.origins : List.of(),
+                        raw.isEmpty() ? List.of() : new ArrayList<>(Arrays.asList(COMMA.split(raw))));
+                default -> {
+                    Log.info("SaveManager", "unknown saved variable type '" + v.type + "' for '" + v.name + "'; dropped");
+                    yield null;
+                }
+            };
+        } catch (NumberFormatException e) {
+            Log.info("SaveManager", "unreadable saved value '" + raw + "' for '" + v.name + "'; dropped");
+            return null;
+        }
     }
 
     public void deleteSave() {

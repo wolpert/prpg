@@ -1,10 +1,10 @@
 package com.prpg.world.scene;
 
 /**
- * A scripted story beat (cutscene) triggered by a TMX trigger's {@code event} property. Events are
- * registered into a {@code Map<String, ScriptedEvent>} via Dagger {@code @IntoMap @StringKey} and
- * run by {@link SceneDirector}, so authors add new beats in data + a small handler class rather
- * than branching inside {@code WorldScreen}.
+ * A scripted effect (cutscene) a story runs with {@code >>> cutscene <id>}, for anything the story's
+ * own commands can't express. Events are registered into a {@code Map<String, ScriptedEvent>} via
+ * Dagger {@code @IntoMap @StringKey} and run by {@link SceneDirector}; the story waits until the
+ * event finishes.
  */
 public interface ScriptedEvent {
 

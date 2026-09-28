@@ -14,20 +14,21 @@ game is, what gets built next, and how the architecture evolves. Concretely:
   well without such a decision, say so and stop at that decision point.
 - Preserve the existing seams (below). If a change would need a new seam or would bypass one,
   say that in a sentence and ask before doing it.
-- Content is data. Prefer editing YAML/TMX/Ink over writing Java; write Java only where the guide
-  says Java is required (a new activity type, a new scripted event, a new bridge function).
+- Content is Ink first. An act's story (`packs/<act>/ink/<act>.ink`) is the source of truth for what
+  happens; prefer editing Ink, then TMX/YAML, over writing Java. Write Java only where the guide
+  says Java is required (a new activity type, story command, scripted event or bridge function).
 - Verify before claiming. Run `./gradlew :core:test` (or `validatePacks` for content-only changes)
   and report the actual result, including failures.
 - No em dashes in prose or comments.
 
 ## What this is
 
-**prpg** is a template for a 2D top-down "pseudo-RPG": tile-map exploration, talk-to-NPC dialogue
-in Ink, small activities (minigames) launched from the map, structured into **acts** that are also
-the **content packs** and the **DLC** unit. Built on libGDX; Java package root is `com.prpg`.
-`README.md` is the human-facing guide (getting started, renaming, commands);
-`docs/content-guide.md` is the content-authoring contract. Both are canonical; this file is the
-short map for Claude.
+**prpg** is a template for a 2D top-down "pseudo-RPG": tile-map exploration, dialogue, small
+activities (minigames), structured into **acts** that are also the **content packs** and the **DLC**
+unit. The game designer builds each act as one Ink story; the engine plays it. Built on libGDX;
+Java package root is `com.prpg`. `README.md` is the human-facing guide (getting started, renaming,
+commands); `docs/content-guide.md` is the content-authoring contract. Both are canonical; this file
+is the short map for Claude.
 
 ## Project shape
 
@@ -37,10 +38,12 @@ Java 21, Gradle (Kotlin DSL), multi-module (`settings.gradle.kts` includes `core
 - `core/` game code (`com.prpg.TheGame` extends libGDX `Game`) + the Dagger graph.
 - `lwjgl3/` desktop launcher; `android/` Android launcher (`applicationId`/`namespace = com.prpg`).
 - `packs/` the canonical content tree. `baseline/` holds shared engine content (ui skin, fonts,
-  `config/game.yaml`, `i18n`, `items/items.yaml`, `ink/common/bridge.ink`, `narrative/manifest.yaml`,
-  the player sprite + atlas, the placeholder tileset). Every other pack is an **act** that owns its
-  own `maps/`, `staging/`, `activities/`, `quests/`, `actors/`, `ink/` and `flags.yaml`. **There is
-  no base map**: each act declares its entry map in `pack.yaml` `provides:`.
+  `config/game.yaml`, `i18n`, `items/items.yaml`, `ink/common/bridge.ink` (engine functions),
+  `ink/common/world.ink` (story variables shared between acts), `narrative/manifest.yaml`, the
+  player sprite + atlas, the placeholder tileset). Every other pack is an **act**: its `ink/`
+  story (state, `cast()`, `stage()`, `journal()`, every knot), its own `maps/` (geography only) and
+  `activities/` (tuning only). **There is no base map**: line 1 of each act's Ink is
+  `# entry: <map> <spawn>`.
 - `assets/` bundled-pack staging area (`assets/packs/` and `assets.txt` are generated, gitignored).
 - `art/` the Tiled project (`art/prpg.tiled-project`) and the Aseprite Lua tool. Per-pack source art
   lives in `packs/<id>/art/`.
@@ -71,34 +74,43 @@ copy it extracted on first run (packs re-extract only when `pack.yaml` `version:
 ## Architecture (the seams)
 
 - **Dagger.** `di/GameComponent` = `CoreModule` (engine, menu screens, scaffold ECS systems) +
-  `world/WorldModule` (world screen, activities, cutscenes) + `narrative/NarrativeModule`. Every
-  content-facing registry is a Dagger multibinding keyed by the string content uses:
-  `@StringKey("<type>") FullScreenActivity` / `PopupActivity` for activities, `@StringKey("<id>")
-  ScriptedEvent` for cutscenes, `@ScreenKey(X.class) Screen` for screens, `@IntoSet EntitySystem`.
+  `world/WorldModule` (world screen, story commands, activities, cutscenes) +
+  `narrative/NarrativeModule`. Every content-facing registry is a Dagger multibinding keyed by the
+  string Ink uses: `@StringKey("<name>") StoryCommand` for `>>>` commands (also listed in
+  `world/command/Commands.ALL` for the validators), `@StringKey("<type>") FullScreenActivity` /
+  `PopupActivity` for activities, `@StringKey("<id>") ScriptedEvent` for cutscenes,
+  `@ScreenKey(X.class) Screen` for screens, `@IntoSet EntitySystem`.
 - **Content resolution.** `content/ContentResolver` turns a logical path (`maps/x.tmx`) into a
   `FileHandle`: mounted packs first (`PackRegistry`), then bundled assets. `PackMounter` extracts
   bundled packs and installs dropped zips into `~/.prpg/content/` before the graph resolves
   content-backed singletons. Never call `Gdx.files.internal` for content.
 - **Acts are data.** `narrative/content/ActContentRegistry` builds the act spine from
-  `narrative/manifest.yaml` merged with each mounted pack's `provides:` (id, order, entryMap,
-  entrySpawn). `ActProgression` walks it with `GateResult` gates (narrative / owned / installed).
-  `WorldScreen` moves the player to the new act's entry map when the act changes. No act enum.
-- **Narrative.** blade-ink. Java owns durable state (`NarrativeState`, `FlagStore`, `Inventory`);
-  Ink stories are ephemeral and talk to Java only through `StateBridge` (the `EXTERNAL`s in
-  `bridge.ink`; reads lookahead-safe, writes not). `NarrativeRunner` drives one cached `Story` per
-  act; an NPC's `dialogue` is a knot name. `InkContentValidationTest` enforces the bridge contract.
+  `narrative/manifest.yaml` merged with each mounted pack's `provides:` (id, title, order), and
+  reads each act's entry from its story's `# entry:` global tag. `ActProgression` walks it with
+  `GateResult` gates (narrative / owned / installed). `WorldScreen` moves the player to the new
+  act's entry and runs its `act_start` knot when the act changes. No act enum.
+- **Narrative (Ink is the source of truth).** blade-ink. Story state is Ink variables: Ink declares
+  and changes them, `narrative/StoryVariables` keeps them by name (pushed into a story before it
+  runs, captured after every step, saved), and acts share one by declaring it once in `world.ink`.
+  `NarrativeRunner` drives one cached `Story` per act: knots (a staged thing's interaction), `>>>`
+  command lines (handed to a `StoryCommand` while the story waits), and `evaluate()` of the act's
+  `stage()` / `cast()` / `journal()` functions. `StateBridge` binds the `EXTERNAL`s in `bridge.ink`:
+  inventory, act spine, and the world-description calls (reads lookahead-safe, writes not).
+  `InkContentValidationTest` enforces the bridge contract; `InkRuntimeContractTest` pins the
+  blade-ink behaviours this relies on.
 - **World.** `WorldScreen` renders the TMX (`MapManager`, grid collision, no physics), ticks the
-  Ashley engine, hosts overlays and popups. `WorldEntityFactory` spawns the map's object layers and
-  the act's **staging** (`world/stage/StageDirector`: `staging/<act>.yaml` resolved against flags;
-  placements name map **markers**, never coordinates).
+  Ashley engine, hosts overlays and popups, and carries out `WorldTravel` requests (portals,
+  `>>> go`). `WorldEntityFactory` spawns the map's portals and the story's staging
+  (`world/stage/StageDirector`: the act's `stage()` re-evaluated whenever variables, the act or the
+  conversation move; placements name map **markers**, never coordinates). Maps hold only geography.
 - **Activities.** `activities/ActivityLauncher` dispatches a `type` string to a
   `FullScreenActivity` (`BaseActivityScreen`: match3, merge) or a `PopupActivity`
-  (`BasePopupActivity`: lightsout). Definitions live in `activities/<type>/<id>.yaml`; every type
-  shares `on_complete` (`OnCompleteApplier`: item + flag + bark, first time only).
-- **Save.** `save/SaveManager` writes one `save.json` under `ContentRoot`; declarative staging and
-  quest progress are re-derived from flags, so only overrides are stored.
+  (`BasePopupActivity`: lightsout). Tuning lives in `activities/<type>/<id>.yaml`. The story plays
+  one with `>>> play <type> <id>` (`world/command/PlayCommand`) and branches on `activity_won`.
+- **Save.** `save/SaveManager` writes one `save.json` (schema v2) under `ContentRoot`: story
+  variables, inventory, act spine, Ink resume tokens. Staging and the journal are re-derived.
 - **Guard rails** (pure JVM, run by `validatePacks`): `ContentValidationTest`,
-  `StagingValidationTest`, `InkContentValidationTest`, `PackConsistencyTest`,
+  `InkWorldValidationTest`, `InkContentValidationTest`, `PackConsistencyTest`,
   `TilesetValidationTest`, `CharacterSpriteContentTest`. Run them after any content edit.
 
 ## Conventions
@@ -107,6 +119,7 @@ copy it extracted on first run (packs re-extract only when `pack.yaml` `version:
   matches `**.config.**`).
 - Logging goes through `util/Log` (null-safe for headless tests); tag = class simple name; the
   message names the offending id/path and the fallback taken. See `docs/logging.md`.
-- Flags are namespaced `act1.*` / `meta.*` and must be declared in a pack's `flags.yaml`.
+- Story variables are declared in exactly one `.ink` file (shared ones in `world.ink`); names
+  starting `meta_` survive a new game. There are no flags or staging/quest/actor YAML files.
 - Tests are headless: pure-JVM logic, Mockito for collaborators, `gdx-backend-headless` on the
   classpath. Nothing in `core/src/test` may need a GL context.

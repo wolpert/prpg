@@ -11,7 +11,6 @@ import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.prpg.activities.BasePopupActivity;
-import com.prpg.activities.OnCompleteApplier;
 import com.prpg.activities.lightsout.config.LightsOutDefinition;
 import com.prpg.config.ConfigLoader;
 import com.prpg.content.ContentResolver;
@@ -22,7 +21,7 @@ import javax.inject.Singleton;
 
 /**
  * The sample <b>popup</b> activity: a small lights-out grid in a panel over the world. Shows the
- * minimum a popup needs: load a definition, build a body, react to taps, apply on_complete, and
+ * minimum a popup needs: load a definition, build a body, react to taps, mark the win, and
  * close itself after a short pause.
  */
 @Singleton
@@ -38,8 +37,8 @@ public class LightsOutPopup extends BasePopupActivity {
 
     @Inject
     public LightsOutPopup(SpriteBatch batch, Skin skin, Fonts fonts, ColorTextures colorTextures,
-                          ConfigLoader configLoader, ContentResolver content, OnCompleteApplier onComplete) {
-        super(batch, skin, fonts, colorTextures, configLoader, content, onComplete);
+                          ConfigLoader configLoader, ContentResolver content) {
+        super(batch, skin, fonts, colorTextures, configLoader, content);
     }
 
     @Override
@@ -48,7 +47,6 @@ public class LightsOutPopup extends BasePopupActivity {
         board = new LightsOutBoard(definition.board.width, definition.board.height);
         board.scramble(definition.scramble, System.nanoTime());
         won = false;
-        pendingDialogue = null;
         setTitle(definition.title);
         setHint(definition.hint);
     }
@@ -89,7 +87,7 @@ public class LightsOutPopup extends BasePopupActivity {
                 refreshCells();
                 if (board.isSolved()) {
                     won = true;
-                    pendingDialogue = onComplete.apply(activityId, definition.on_complete);
+                    markWon();
                     setTitle("Opened.");
                     startWinPause(WIN_PAUSE_TIME);
                 }

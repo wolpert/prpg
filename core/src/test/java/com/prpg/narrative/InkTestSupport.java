@@ -13,10 +13,6 @@ import com.prpg.items.Inventory;
 import com.prpg.narrative.config.NarrativeManifest;
 import com.prpg.narrative.content.ActContentRegistry;
 import com.prpg.narrative.content.ActContentSource;
-import com.prpg.world.FlagStore;
-import com.prpg.world.GameClock;
-import com.prpg.world.stage.ActorRegistry;
-import com.prpg.world.stage.StageDirector;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -25,20 +21,21 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
- * Test support for the narrative layer. Compiles {@code ink/} source on the fly with the same
- * blade-ink compiler the Gradle task uses, so tests never depend on committed JSON being fresh.
- * Pure JVM, no libGDX.
+ * Test support for anything that runs the real sample stories. Compiles {@code ink/} source on the
+ * fly with the same blade-ink compiler the Gradle task uses, so tests never depend on committed JSON
+ * being fresh. Pure JVM, no libGDX.
  */
-final class InkTestSupport {
+public final class InkTestSupport {
 
     private InkTestSupport() {}
 
     private static final Map<String, String> CACHE = new LinkedHashMap<>();
 
     /** Locates the repo-root {@code packs/} dir from whatever working dir the test runner uses. */
-    static File packsRoot() {
+    public static File packsRoot() {
         for (String candidate : new String[]{"packs", "../packs", "../../packs"}) {
             File f = new File(candidate);
             if (new File(f, "baseline").isDirectory()) return f;
@@ -48,17 +45,17 @@ final class InkTestSupport {
     }
 
     /** The shared Ink include root: {@code packs/baseline/ink/} (holds {@code common/bridge.ink}). */
-    static File commonInkRoot() {
+    public static File commonInkRoot() {
         return new File(packsRoot(), "baseline/ink");
     }
 
     /** The main Ink source for an act: {@code packs/<actId>/ink/<actId>.ink}. */
-    static File inkSource(String actId) {
+    public static File inkSource(String actId) {
         return new File(packsRoot(), actId + "/ink/" + actId + ".ink");
     }
 
     /** Every pack id that has an {@code ink/<id>.ink} story, sorted. */
-    static List<String> actIdsWithInk() {
+    public static List<String> actIdsWithInk() {
         List<String> out = new ArrayList<>();
         File[] packs = packsRoot().listFiles(File::isDirectory);
         if (packs == null) return out;
@@ -70,7 +67,7 @@ final class InkTestSupport {
     }
 
     /** Compiles {@code packs/<actId>/ink/<actId>.ink} to JSON (cached per actId). */
-    static String compileJson(String actId) {
+    public static String compileJson(String actId) {
         return CACHE.computeIfAbsent(actId, InkTestSupport::compileUncached);
     }
 
@@ -89,7 +86,7 @@ final class InkTestSupport {
     }
 
     /** A fresh runtime Story for an act (not bridged). */
-    static Story story(String actId) {
+    public static Story story(String actId) {
         try {
             return new Story(compileJson(actId));
         } catch (Exception e) {
@@ -98,7 +95,7 @@ final class InkTestSupport {
     }
 
     /** An in-memory {@link ActContentSource} that supplies exactly the named acts. */
-    static ActContentSource sourceFor(String... actIds) {
+    public static ActContentSource sourceFor(String... actIds) {
         Map<String, String> jsons = new LinkedHashMap<>();
         for (String id : actIds) jsons.put(id, compileJson(id));
         return new ActContentSource() {
@@ -115,7 +112,7 @@ final class InkTestSupport {
     }
 
     /** A catalog declaring the given acts in order (order = position + 1), over {@code source}. */
-    static ActContentRegistry registry(ActContentSource source, String... actIds) {
+    public static ActContentRegistry registry(ActContentSource source, String... actIds) {
         ActContentRegistry registry = new ActContentRegistry(
                 new ConfigLoader(), mock(ContentResolver.class), mock(PackRegistry.class), source);
         NarrativeManifest manifest = new NarrativeManifest();
@@ -131,7 +128,7 @@ final class InkTestSupport {
     }
 
     /** Advances a linear (choice-free) conversation to its end, collecting each line's text. */
-    static List<String> drain(NarrativeRunner r) {
+    public static List<String> drain(NarrativeRunner r) {
         List<String> lines = new ArrayList<>();
         int guard = 0;
         while (r.isActive() && !r.hasChoices() && guard++ < 500) {
@@ -142,7 +139,7 @@ final class InkTestSupport {
     }
 
     /** Drives a conversation to its end, always taking the first available choice. Returns all lines. */
-    static List<String> drivePickingFirst(NarrativeRunner r) {
+    public static List<String> drivePickingFirst(NarrativeRunner r) {
         List<String> lines = new ArrayList<>();
         int guard = 0;
         while (r.isActive() && guard++ < 500) {
@@ -158,20 +155,49 @@ final class InkTestSupport {
 
     /**
      * A {@link NarrativeRunner} wired to a {@link StateBridge} over the supplied collaborators, with a
-     * catalog of the two sample acts so {@code next_act_gate()} / {@code advance_act()} are live.
+     * catalog of the two sample acts so {@code next_act_gate()} / {@code advance_act()} are live, and
+     * with {@code commands} as the registered story commands.
      */
-    static NarrativeRunner runner(ActContentSource source, NarrativeState state, FlagStore flags,
-                                  Inventory inv, GameClock clock, Entitlement ent) {
-        StageDirector stage = stageDirector(flags);
-        ActProgression progression = new ActProgression(state, ent, registry(source, "act1", "act2"), stage);
-        StateBridge bridge = new StateBridge(state, flags, inv, clock, ent, stage, progression);
-        return new NarrativeRunner(source, bridge);
+    public static NarrativeRunner runner(ActContentSource source, NarrativeState state,
+                                         StoryVariables vars, Inventory inv, Entitlement ent,
+                                         Map<String, StoryCommand> commands) {
+        ActProgression progression = new ActProgression(state, ent, registry(source, "act1", "act2"));
+        StateBridge bridge = new StateBridge(state, inv, ent, progression);
+        return new NarrativeRunner(source, bridge, vars, commands);
     }
 
-    /** A real {@link StageDirector} with no staging loaded (the content read is mocked out). */
-    static StageDirector stageDirector(FlagStore flags) {
-        return new StageDirector(new ConfigLoader(), mock(ContentResolver.class), flags,
-                mock(ActorRegistry.class));
+    /** {@link #runner} with every command finishing instantly (a stand-in for the world). */
+    public static NarrativeRunner runner(ActContentSource source, NarrativeState state,
+                                         StoryVariables vars, Inventory inv, Entitlement ent) {
+        return runner(source, state, vars, inv, ent, instantCommands(null));
+    }
+
+    /**
+     * Every real command name bound to a stand-in that finishes at once, reporting each line it was
+     * given to {@code seen} (nullable). {@code play} leaves {@code activity_won} as it is.
+     */
+    public static Map<String, StoryCommand> instantCommands(Consumer<List<String>> seen) {
+        Map<String, StoryCommand> out = new LinkedHashMap<>();
+        for (String name : List.of("play", "go", "wait", "fade", "cutscene")) {
+            out.put(name, new StoryCommand() {
+                @Override
+                public boolean start(List<String> args) {
+                    if (seen != null) {
+                        List<String> line = new ArrayList<>();
+                        line.add(name);
+                        line.addAll(args);
+                        seen.accept(line);
+                    }
+                    return false;
+                }
+
+                @Override
+                public boolean update(float delta) {
+                    return false;
+                }
+            });
+        }
+        return out;
     }
 
     /** Resolves INCLUDEs against the main file's dir first, then the shared ink/ root. */

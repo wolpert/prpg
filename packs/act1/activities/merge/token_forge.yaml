@@ -11,7 +11,3 @@ ladder:
 starting_inventory:
   token_1: 4
 win: { produce: sigil, count: 1 }
-on_complete:
-  give_item: sigil
-  set_flag: act1.forged_sigil    # REQUIRED alongside give_item, or the reward repeats
-  dialogue: sigil_forged

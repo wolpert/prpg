@@ -50,6 +50,7 @@ import com.prpg.narrative.ActProgression;
 import com.prpg.narrative.NarrativeOverlay;
 import com.prpg.narrative.NarrativeRunner;
 import com.prpg.narrative.NarrativeState;
+import com.prpg.narrative.StoryVariables;
 import com.prpg.narrative.config.NarrativeManifest.ActEntry;
 import com.prpg.narrative.content.ActContentRegistry;
 import com.prpg.quests.QuestLogOverlay;
@@ -59,6 +60,7 @@ import com.prpg.screens.ScreenNavigator;
 import com.prpg.ui.ColorTextures;
 import com.prpg.ui.Fonts;
 import com.prpg.util.Log;
+import com.prpg.world.command.PlayCommand;
 import com.prpg.world.scene.SceneDirector;
 import com.prpg.world.stage.StageDirector;
 import javax.inject.Inject;
@@ -70,15 +72,21 @@ import javax.inject.Singleton;
  * engine, and hosts the narrative/inventory/quest overlays, popup activities, the HUD and a fade veil
  * for cutscenes. Implements {@link Screen} directly (gameplay is ECS-driven, not Scene2D).
  *
- * <p>The act decides where the world begins: {@link #newGame()} places the player on the first act's
- * entry map, and when {@link ActProgression} advances the act the screen notices and moves the
- * player to the new act's entry map.
+ * <p>The story drives it. Interacting with a staged actor or thing, or walking into a staged zone,
+ * runs a knot; the knot's command lines ({@code >>> play}, {@code >>> go}, ...) are carried out while
+ * the story waits; whatever the story changed is re-staged. The act decides where the world begins:
+ * {@link #newGame()} places the player at the first act's {@code # entry:}, and when
+ * {@link ActProgression} advances the act the screen moves the player to the new act's entry. Either
+ * way, the act's optional {@code act_start} knot then runs.
  */
 @Singleton
 public class WorldScreen implements Screen {
 
     private static final float COLLISION_OFFSET_X = WorldEntityFactory.COLLISION_OFFSET_X;
     private static final float COLLISION_OFFSET_Y = WorldEntityFactory.COLLISION_OFFSET_Y;
+
+    /** The optional knot an act runs as its opening scene each time the act is entered. */
+    public static final String ACT_START_KNOT = "act_start";
 
     private static final ComponentMapper<PositionComponent> POSITIONS =
             ComponentMapper.getFor(PositionComponent.class);
@@ -94,12 +102,12 @@ public class WorldScreen implements Screen {
     private final NarrativeState narrativeState;
     private final ActProgression progression;
     private final ActContentRegistry acts;
-    private final FlagStore flagStore;
+    private final StoryVariables variables;
     private final Inventory inventory;
     private final InventoryOverlay inventoryOverlay;
     private final ActivityLauncher activityLauncher;
     private final TriggerSystem triggerSystem;
-    private final TriggerHistory triggerHistory;
+    private final WorldTravel travel;
     private final QuestLogOverlay questLogOverlay;
     private final SaveManager saveManager;
     private final GameClock gameClock;
@@ -129,13 +137,11 @@ public class WorldScreen implements Screen {
     private Entity playerEntity;
     private ImmutableArray<Entity> playerFamily;
 
-    private String pendingPortalMap;
-    private String pendingPortalSpawn;
     /** Spawn to use on the next build when there is no pending load (act entry / new game). */
     private String pendingSpawnName;
 
-    // A trigger's scripted event, queued one frame so it starts outside engine.update().
-    private String pendingEventId;
+    /** An act was just entered: run its act_start knot once the world is built. */
+    private boolean pendingActStart;
     private Image fadeImage;
 
     // When set, the next buildWorld places the player at this exact sprite position (a loaded save).
@@ -151,9 +157,8 @@ public class WorldScreen implements Screen {
     private float toastTimer;
 
     private Stage hudStage;
-    private Label flagLabel;
-    private int lastFlagVersion = -1;
-    private int stagedFlagVersion = -1;
+    private Label stateLabel;
+    private int lastStateVersion = -1;
     private int stagedRevision = -1;
     private Table hudTable;
     private Table controls;
@@ -176,12 +181,12 @@ public class WorldScreen implements Screen {
                        NarrativeState narrativeState,
                        ActProgression progression,
                        ActContentRegistry acts,
-                       FlagStore flagStore,
+                       StoryVariables variables,
                        Inventory inventory,
                        InventoryOverlay inventoryOverlay,
                        ActivityLauncher activityLauncher,
                        TriggerSystem triggerSystem,
-                       TriggerHistory triggerHistory,
+                       WorldTravel travel,
                        QuestLogOverlay questLogOverlay,
                        SaveManager saveManager,
                        GameClock gameClock,
@@ -204,12 +209,12 @@ public class WorldScreen implements Screen {
         this.narrativeState = narrativeState;
         this.progression = progression;
         this.acts = acts;
-        this.flagStore = flagStore;
+        this.variables = variables;
         this.inventory = inventory;
         this.inventoryOverlay = inventoryOverlay;
         this.activityLauncher = activityLauncher;
         this.triggerSystem = triggerSystem;
-        this.triggerHistory = triggerHistory;
+        this.travel = travel;
         this.questLogOverlay = questLogOverlay;
         this.saveManager = saveManager;
         this.gameClock = gameClock;
@@ -230,14 +235,14 @@ public class WorldScreen implements Screen {
         ScreenViewport hudViewport = new ScreenViewport();
         hudViewport.setUnitsPerPixel(1f / Gdx.graphics.getDensity());
         hudStage = new Stage(hudViewport, batch);
-        flagLabel = new Label("", new Label.LabelStyle(fonts.small(), null));
-        flagLabel.setColor(1f, 1f, 0.5f, 1f);
-        flagLabel.setTouchable(Touchable.disabled);
+        stateLabel = new Label("", new Label.LabelStyle(fonts.small(), null));
+        stateLabel.setColor(1f, 1f, 0.5f, 1f);
+        stateLabel.setTouchable(Touchable.disabled);
         hudTable = new Table();
         hudTable.setFillParent(true);
         hudTable.setTouchable(Touchable.childrenOnly);
         hudTable.top().left();
-        hudTable.add(flagLabel).left();
+        hudTable.add(stateLabel).left();
         hudStage.addActor(hudTable);
 
         // On-screen Items / Quests buttons: the touch equivalents of the I/TAB and Q keys.
@@ -270,52 +275,28 @@ public class WorldScreen implements Screen {
 
         applyHudSafeInsets();
 
+        // Everything the player can interact with was staged by the story, and runs one of its knots.
         interactionSystem.addListener(target -> {
             if (worldInputBlocked()) return;
-
             InteractableComponent inter = target.getComponent(InteractableComponent.class);
-            if (inter == null) return;
-            if (WorldEntityFactory.TYPE_NPC.equals(inter.type) && inter.id != null) {
-                startDialogue(inter.id);
-            } else if (WorldEntityFactory.TYPE_ITEM.equals(inter.type) && inter.id != null) {
-                if (inventory.add(inter.id, 1)) {
-                    Log.debug("WorldScreen", "picked up item '" + inter.id + "'");
-                    engine.removeEntity(target);
-                } else {
-                    Log.info("WorldScreen", "pickup \"" + inter.id
-                            + "\" not added to inventory (unknown id or full); leaving entity in world");
-                }
-            } else if (inter.type != null && activityLauncher.has(inter.type)) {
-                // Match3, merge, lightsout, or any future activity type: launched by string.
-                savePlayerPosition();
-                activityLauncher.launch(inter.type, inter.id);
-            } else {
-                Log.debug("WorldScreen", "interactable type '" + inter.type + "' (id '" + inter.id + "') has no handler");
-            }
+            if (inter != null && inter.knot != null) startDialogue(inter.knot);
         });
 
         triggerSystem.addListener(zone -> {
             TriggerComponent t = zone.getComponent(TriggerComponent.class);
             if (t != null) {
-                if (t.requireFlag != null && !flagStore.hasFlag(t.requireFlag)) return;
-                if (t.fireOnce && triggerHistory.hasFired(t.id)) return;
-                if (t.setFlag != null) flagStore.setFlag(t.setFlag);
-                if (t.event != null) {
-                    if (sceneDirector.has(t.event)) {
-                        pendingEventId = t.event; // deferred so it starts outside engine.update()
-                    } else {
-                        Log.info("WorldScreen",
-                                "trigger '" + t.id + "' names unregistered event '" + t.event + "'; cutscene skipped");
-                    }
-                }
-                if (t.fireOnce) triggerHistory.markFired(t.id);
+                // A staged zone: walking in runs its knot. The story decides whether it fires again
+                // (usually by setting a variable that makes stage() stop placing it).
+                if (t.knot != null && !narrativeRunner.isActive()) startDialogue(t.knot);
                 return;
             }
             PortalComponent p = zone.getComponent(PortalComponent.class);
             if (p != null) {
-                if (p.requireFlag != null && !flagStore.hasFlag(p.requireFlag)) return;
-                pendingPortalMap = p.targetMap;
-                pendingPortalSpawn = p.targetSpawn;
+                if (stageDirector.isPortalLocked(p.name)) {
+                    Log.debug("WorldScreen", "portal '" + p.name + "' is locked by the story");
+                    return;
+                }
+                travel.request(p.targetMap, p.targetSpawn); // carried out at the top of the next frame
             }
         });
     }
@@ -343,17 +324,17 @@ public class WorldScreen implements Screen {
 
     /** Resets all session state for a fresh playthrough. Call before navigating to this screen. */
     public void newGame() {
-        flagStore.clearRun(); // keep persistent meta.* profile state across playthroughs
+        variables.clearRun(); // keep persistent meta_* profile state across playthroughs
         inventory.clear();
-        triggerHistory.clear();
         gameClock.reset();
         narrativeRunner.clear();  // drop cached Ink stories so no state leaks across playthroughs
         mapManager.clearSavedPositions();
-        progression.beginNewGame(); // first act: unlocked, current, staged
+        progression.beginNewGame(); // first act: unlocked and current
+        stageDirector.invalidate();
         pendingLoad = false;
-        pendingPortalMap = null;
-        pendingEventId = null;
+        travel.clear();
         pointAtActEntry(narrativeState.getCurrentActId());
+        pendingActStart = true;
     }
 
     /** Loads the save (applies inventory/flags/triggers/narrative) and queues the player's exact position. */
@@ -375,8 +356,8 @@ public class WorldScreen implements Screen {
             pointAtActEntry(narrativeState.getCurrentActId());
         }
         builtActId = narrativeState.getCurrentActId();
-        pendingPortalMap = null;
-        pendingEventId = null;
+        travel.clear();
+        pendingActStart = false;
     }
 
     /** Sets the current map/spawn to an act's declared entry point (its pack.yaml provides:). */
@@ -387,7 +368,7 @@ public class WorldScreen implements Screen {
             Log.error("WorldScreen", "act '" + actId + "' declares no entry map; staying on '"
                     + mapManager.getCurrentMapId() + "'");
             if (mapManager.getCurrentMapId() == null && entry != null) {
-                Log.error("WorldScreen", "no map at all; add entryMap to the act's pack.yaml provides:");
+                Log.error("WorldScreen", "no map at all; add '# entry: <map> <spawn>' to the top of the act's Ink");
             }
             return;
         }
@@ -594,7 +575,6 @@ public class WorldScreen implements Screen {
 
         playerEntity = entityFactory.createPlayer(spriteX, spriteY, facing);
         entityFactory.spawnMapContent(playerEntity);
-        stagedFlagVersion = flagStore.getVersion();
         stagedRevision = stageDirector.revision();
         builtActId = narrativeState.getCurrentActId();
 
@@ -607,12 +587,10 @@ public class WorldScreen implements Screen {
         triggerSystem.reset();
     }
 
-    /** Re-derives the act's staged content when the flags or the imperative overrides have moved. */
+    /** Re-stages the world when the story's stage() now says something different. */
     private void refreshStagedIfChanged() {
-        int flagVersion = flagStore.getVersion();
         int revision = stageDirector.revision();
-        if (flagVersion == stagedFlagVersion && revision == stagedRevision) return;
-        stagedFlagVersion = flagVersion;
+        if (revision == stagedRevision) return;
         stagedRevision = revision;
         entityFactory.refreshStaged(playerEntity);
     }
@@ -650,6 +628,37 @@ public class WorldScreen implements Screen {
         autosave();
         ActEntry entry = acts.entry(current);
         toast(entry != null && entry.title != null ? entry.title : current);
+        pendingActStart = true;
+    }
+
+    /** Runs the current act's optional {@code act_start} knot (its opening scene), once per entry. */
+    private void runActStartIfPending() {
+        if (!pendingActStart || narrativeRunner.isActive()) return;
+        pendingActStart = false;
+        String act = narrativeState.getCurrentActId();
+        if (narrativeRunner.hasKnot(act, ACT_START_KNOT)) {
+            startDialogue(ACT_START_KNOT);
+        }
+    }
+
+    /** Carries out a pending portal or {@code >>> go}: rebuild on the target map at the target spawn. */
+    private void travelIfRequested() {
+        if (!travel.isPending()) return;
+        String map = travel.map();
+        String spawnName = travel.spawn();
+        travel.clear();
+        mapManager.setCurrentMapId(map);
+        buildWorld(spawnName);
+        Log.debug("WorldScreen", "entered map '" + map + "' (spawn '" + spawnName + "')");
+        // A move the story makes mid-conversation autosaves once the conversation is over instead.
+        if (!narrativeRunner.isActive()) autosave();
+    }
+
+    /** A story that ended while faded out would leave the player in the dark; lift the veil. */
+    private void liftAbandonedFade() {
+        if (narrativeRunner.isActive() || sceneDirector.isActive() || sceneDirector.fadeAlpha() <= 0f) return;
+        Log.info("WorldScreen", "a conversation ended with the screen faded out (no '>>> fade in'); lifting it");
+        sceneDirector.setFade(0f);
     }
 
     private void autosave() {
@@ -664,29 +673,14 @@ public class WorldScreen implements Screen {
     public void render(float delta) {
         if (!lifecycleGate.isAppActive()) delta = 0f;
 
-        if (pendingPortalMap != null) {
-            mapManager.setCurrentMapId(pendingPortalMap);
-            String spawnName = pendingPortalSpawn;
-            pendingPortalMap = null;
-            pendingPortalSpawn = null;
-            buildWorld(spawnName);
-            Log.debug("WorldScreen", "entered map '" + mapManager.getCurrentMapId()
-                    + "' (spawn '" + spawnName + "'); autosaving");
-            autosave();
-        }
-
+        travelIfRequested();
         enterActIfChanged();
+        runActStartIfPending();
 
-        if (pendingEventId != null && !sceneDirector.isActive()) {
-            sceneDirector.trigger(pendingEventId);
-            pendingEventId = null;
-        }
-
-        // A just-completed activity (full-screen or popup) may have queued a barked dialogue.
-        if (!narrativeRunner.isActive() && !activityLauncher.isPopupOpen()) {
-            String queued = activityLauncher.consumePendingDialogue();
-            if (queued != null) startDialogue(queued);
-        }
+        // A command the story is waiting on (an activity, a fade, a cutscene) advances here, and the
+        // story resumes the moment it finishes.
+        narrativeRunner.update(delta);
+        liftAbandonedFade();
 
         refreshStagedIfChanged();
         releaseGracedBlockers();
@@ -712,14 +706,10 @@ public class WorldScreen implements Screen {
         if (fgLayers.length > 0) mapRenderer.render(fgLayers);
 
         sceneDirector.update(delta);
-        fadeImage.setVisible(sceneDirector.isActive());
+        fadeImage.setVisible(sceneDirector.fadeAlpha() > 0f);
         fadeImage.getColor().a = sceneDirector.fadeAlpha();
 
         narrativeOverlay.update(delta);
-        String narrativeEvent = narrativeRunner.consumePendingEvent();
-        if (narrativeEvent != null && sceneDirector.has(narrativeEvent)) {
-            pendingEventId = narrativeEvent;
-        }
         narrativeOverlay.draw();
 
         activityLauncher.updatePopup(delta);
@@ -731,7 +721,7 @@ public class WorldScreen implements Screen {
         questLogOverlay.update(delta);
         questLogOverlay.draw();
 
-        updateFlagHud();
+        updateStateHud();
         if (toastTimer > 0f) {
             toastTimer -= delta;
             if (toastTimer <= 0f) toastLabel.setVisible(false);
@@ -742,18 +732,17 @@ public class WorldScreen implements Screen {
         debugOverlay.render(delta);
     }
 
-    private void updateFlagHud() {
-        if (flagStore.getVersion() == lastFlagVersion) return;
-        lastFlagVersion = flagStore.getVersion();
-        if (flagStore.getAll().isEmpty()) {
-            flagLabel.setText("(no flags set)");
-        } else {
-            StringBuilder sb = new StringBuilder("Flags:");
-            for (String key : flagStore.getAll().keySet()) {
-                sb.append("\n  ").append(key);
-            }
-            flagLabel.setText(sb.toString());
+    /** Debug HUD: the story variables that currently hold a truthy value. */
+    private void updateStateHud() {
+        if (variables.version() == lastStateVersion) return;
+        lastStateVersion = variables.version();
+        StringBuilder sb = new StringBuilder();
+        for (var e : variables.all().entrySet()) {
+            if (!variables.isTrue(e.getKey()) || PlayCommand.RESULT_VARIABLE.equals(e.getKey())) continue;
+            sb.append("\n  ").append(e.getKey());
+            if (!(e.getValue() instanceof Boolean)) sb.append(" = ").append(e.getValue());
         }
+        stateLabel.setText(sb.length() == 0 ? "(story just begun)" : "Story:" + sb);
     }
 
     // Identity is the point: animation(dirIdx, moving) hands back one cached Animation per
@@ -848,6 +837,9 @@ public class WorldScreen implements Screen {
 
     @Override
     public void hide() {
+        // A full-screen activity is about to take over; remember where the player stood so the
+        // world rebuilds around them when it returns.
+        savePlayerPosition();
         Gdx.input.setInputProcessor(null);
         Gdx.input.setCatchKey(Input.Keys.BACK, false);
     }

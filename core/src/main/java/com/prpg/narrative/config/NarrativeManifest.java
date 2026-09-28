@@ -34,11 +34,9 @@ public class NarrativeManifest {
         public String source;
         /** {@code FREE} or {@code PAID}. */
         public String entitlement;
-        /** Optional flag whose setting marks this act's narrative gate as crossed. */
-        public String gate_flag;
-        /** Map the act opens on; normally supplied by the pack's {@code provides:} rather than here. */
+        /** Map the act opens on. Filled at runtime from the act story's {@code # entry:} tag. */
         public String entry_map;
-        /** Named spawn on {@link #entry_map}; the map's first spawn when null. */
+        /** Named spawn on {@link #entry_map}; the map's first spawn when null. Also from the tag. */
         public String entry_spawn;
 
         public boolean isFree() {

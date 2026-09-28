@@ -2,33 +2,18 @@
 schemaVersion: 1
 id: act1
 kind: act
-version: 1
+version: 2
 bundled: true                 # ships inside the app (staged by the build)
 requiresBaseline: true
 baselineVersion: ">=1"
 provides:
   - id: act1
     title: The Gatehouse
-    order: 1
-    entryMap: gatehouse_yard  # this pack's maps/gatehouse_yard.tmx
-    entrySpawn: start         # a named object in that map's spawn layer
-flags:                        # mirror of flags.yaml (convention)
-  - act1.met_keeper
-  - act1.hedge_cleared
-  - act1.strongbox_opened
-  - act1.forged_sigil
-  - act1.act_complete
-  - act1.rested
-  - act1.crossed_gate
-requiresFlags: []
+    order: 1                  # where it begins is the story's call: `# entry:` in ink/act1.ink
 files:
   - activities/lightsout/strongbox.yaml
   - activities/match3/hedge.yaml
   - activities/merge/token_forge.yaml
-  - actors/keeper.yaml
-  - flags.yaml
   - maps/gatehouse_hall.tmx
   - maps/gatehouse_yard.tmx
   - narrative/act1.ink.json
-  - quests/first_errand.yaml
-  - staging/act1.yaml

@@ -4,9 +4,9 @@ package com.prpg.config;
  * Engine tunables loaded from {@code config/game.yaml} (baseline pack). Plain public fields for
  * SnakeYAML field access; every field has a default so a partial YAML still boots.
  *
- * <p>There is deliberately no "start map" here: the opening map belongs to the first act's pack
- * ({@code pack.yaml} {@code provides: entryMap/entrySpawn}), so the world never depends on a map
- * the baseline would have to own.
+ * <p>There is deliberately no "start map" here: the opening map belongs to the first act's story
+ * (its {@code # entry: <map> <spawn>} tag), so the world never depends on a map the baseline would
+ * have to own.
  */
 public class GameConfig {
     /** Window / main-menu title. */

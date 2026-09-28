@@ -83,9 +83,10 @@ repositories {
 }
 
 // =========================================================================================
-// Content packs. A pack is one self-contained folder under packs/: an act (maps, tilesets, story,
-// staging, activities, quests, flags) or the shared `baseline` (ui, fonts, config, items, player
-// art, the Ink bridge, the act catalog). Packs with `bundled: true` in their pack.yaml ship inside
+// Content packs. A pack is one self-contained folder under packs/: an act (its Ink story, which
+// holds everything that happens, plus the maps, tilesets and activity tuning it refers to) or the
+// shared `baseline` (ui, fonts, config, items, player art, the Ink bridge and shared story state,
+// the act catalog). Packs with `bundled: true` in their pack.yaml ship inside
 // the app; everything else is DLC, zipped by packPack and dropped into the content root.
 // =========================================================================================
 
@@ -228,7 +229,7 @@ tasks.register("newPack") {
         val packDir = file("packs/$id")
         if (packDir.exists()) throw GradleException("packs/$id already exists")
         com.prpg.build.PackScaffold.scaffold(packDir, id, kind, order)
-        logger.lifecycle("scaffolded packs/$id (kind=$kind, order=$order): edit pack.yaml, ink/$id.ink, maps/${id}_start.tmx, staging/$id.yaml; then ./gradlew shipPack -Ppack=$id")
+        logger.lifecycle("scaffolded packs/$id (kind=$kind, order=$order): write the act in ink/$id.ink (lay out maps/${id}_start.tmx in Tiled), set the title in pack.yaml; then ./gradlew shipPack -Ppack=$id")
     }
 }
 

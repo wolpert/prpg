@@ -16,7 +16,7 @@ separate level.
 | Missing required content (no such knot, bundled file absent, no `pack.yaml`) | `error` |
 | Missing optional content / graceful fallback (unknown item id ignored, i18n key fallthrough) | `error`, phrased as a warning, naming the fallback |
 | Significant state change (act advanced, save written, area transition, session start) | `info` |
-| High-frequency / per-frame diagnostics (flag sets, lookahead skips, per-tick movement) | `debug` |
+| High-frequency / per-frame diagnostics (story variable changes, lookahead skips, per-tick movement) | `debug` |
 
 Rule of thumb: `error` = a developer needs to know this happened (recovered or not); `info` = the
 normal story of a session; `debug` = only while debugging that subsystem.

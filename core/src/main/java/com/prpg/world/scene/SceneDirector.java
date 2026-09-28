@@ -6,10 +6,10 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 
 /**
- * Runs at most one {@link ScriptedEvent} at a time and exposes a shared full-screen fade level the
- * active screen renders. Events are looked up by id from the Dagger multibound map, so triggering a
- * cutscene is {@code director.trigger("margaret_sighting")} with no compile-time coupling to the
- * event class.
+ * Runs at most one {@link ScriptedEvent} at a time and holds the shared full-screen fade level the
+ * world renders (driven by an event, or by the story's {@code >>> fade} command). Events are looked
+ * up by id from the Dagger multibound map, so a story's {@code >>> cutscene fade_beat} needs no
+ * compile-time coupling to the event class.
  */
 @Singleton
 public class SceneDirector {

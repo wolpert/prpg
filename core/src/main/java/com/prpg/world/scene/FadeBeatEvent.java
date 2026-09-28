@@ -9,9 +9,7 @@ import javax.inject.Singleton;
  * Useful on its own for "time passes" moments, and the smallest possible template for a real
  * scripted event: implement {@link ScriptedEvent}, drive the shared fade via the director, and
  * return {@code false} from {@link #update} when done. Register under a string id in
- * {@code WorldModule}; content then fires it with {@code event: fade_beat} (a trigger) or
- * {@code # event: fade_beat} (an Ink line). Pair it with a trigger's {@code set_flag} when the beat
- * should leave a mark on the story.
+ * {@code WorldModule}; a story then runs it with {@code >>> cutscene fade_beat} and waits for it.
  */
 @Singleton
 public class FadeBeatEvent implements ScriptedEvent {

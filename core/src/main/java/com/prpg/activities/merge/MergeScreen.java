@@ -14,7 +14,6 @@ import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.prpg.activities.BaseActivityScreen;
-import com.prpg.activities.OnCompleteApplier;
 import com.prpg.activities.merge.config.MergeDefinition;
 import com.prpg.config.ConfigLoader;
 import com.prpg.content.ContentResolver;
@@ -56,9 +55,9 @@ public class MergeScreen extends BaseActivityScreen {
 
     @Inject
     public MergeScreen(SpriteBatch batch, Skin skin, Fonts fonts, ColorTextures colorTextures,
-                       ConfigLoader configLoader, ContentResolver content, OnCompleteApplier onComplete,
+                       ConfigLoader configLoader, ContentResolver content,
                        Provider<ScreenNavigator> nav) {
-        super(batch, skin, fonts, colorTextures, configLoader, content, onComplete, nav);
+        super(batch, skin, fonts, colorTextures, configLoader, content, nav);
     }
 
     @Override
@@ -79,7 +78,6 @@ public class MergeScreen extends BaseActivityScreen {
 
         grabbed = null;
         won = false;
-        pendingDialogue = null;
     }
 
     @Override
@@ -239,7 +237,7 @@ public class MergeScreen extends BaseActivityScreen {
         if (won || definition.win == null) return;
         if (board.count(definition.win.produce) < definition.win.count) return;
         won = true;
-        pendingDialogue = onComplete.apply(activityId, definition.on_complete);
+        markWon();
         titleLabel.setText("Done.");
         startWinPause(WIN_PAUSE_TIME);
     }

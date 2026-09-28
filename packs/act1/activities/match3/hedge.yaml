@@ -1,4 +1,5 @@
-# A match-3 board. The filename's base is the activity id staging refers to.
+# A match-3 board. The filename's base is the activity id: the story plays it with
+# `>>> play match3 hedge` and decides in Ink what winning means.
 id: hedge
 title: Clear the hedge
 board:
@@ -11,6 +12,3 @@ win:
     bramble: 6
     leaf: 6
     thorn: 6
-on_complete:
-  set_flag: act1.hedge_cleared   # pairs with the obstacle's cleared_when
-  dialogue: hedge_cleared        # Ink knot barked when the world resumes (first time only)

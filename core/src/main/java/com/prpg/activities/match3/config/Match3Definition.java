@@ -1,6 +1,5 @@
 package com.prpg.activities.match3.config;
 
-import com.prpg.activities.config.OnCompleteConfig;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -12,7 +11,6 @@ public class Match3Definition {
     public String title = "Match three";
     public BoardConfig board;
     public WinConfig win;
-    public OnCompleteConfig on_complete;
 
     public static class BoardConfig {
         public int width;

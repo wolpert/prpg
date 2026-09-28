@@ -1,7 +1,5 @@
 package com.prpg.activities.lightsout.config;
 
-import com.prpg.activities.config.OnCompleteConfig;
-
 /** A lights-out popup definition ({@code activities/lightsout/<id>.yaml}). */
 public class LightsOutDefinition {
     public String id;
@@ -13,7 +11,6 @@ public class LightsOutDefinition {
     /** Swatch colours for lit / unlit tiles (RRGGBB, no '#'). */
     public String lit_color = "E8C860";
     public String unlit_color = "2A2E38";
-    public OnCompleteConfig on_complete;
 
     public static class BoardConfig {
         public int width = 3;

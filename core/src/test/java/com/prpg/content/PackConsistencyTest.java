@@ -21,9 +21,9 @@ import org.yaml.snakeyaml.Yaml;
 
 /**
  * Per-pack integrity guard rails (the analogue of {@code ContentValidationTest} for pack manifests):
- * each {@code pack.yaml}'s generated {@code files:} list matches the pack's runtime files on disk,
- * every {@code requiresFlags:} entry is declared by some pack (the cross-pack flag contract), and any
- * committed atlas references page images that exist. Pure JVM (SnakeYAML + a directory walk) — no GL.
+ * each {@code pack.yaml}'s generated {@code files:} list matches the pack's runtime files on disk, no
+ * pack still carries content the Ink-first engine retired, and any committed atlas references page
+ * images that exist. Pure JVM (SnakeYAML + a directory walk), no GL.
  */
 class PackConsistencyTest {
 
@@ -72,16 +72,38 @@ class PackConsistencyTest {
     }
 
     @Test
-    void requiredFlagsAreDeclaredSomewhere() {
-        Set<String> declared = new HashSet<>();
-        for (File pack : packDirs()) {
-            declared.addAll(stringList(loadYaml(new File(pack, "pack.yaml")).get("flags")));
-        }
+    void retiredContentIsGone() {
+        // Story content moved into each act's Ink. These files would now be ignored (or, for
+        // pack.yaml fields, stop the pack from mounting), so a leftover is a silent story break.
+        Map<String, String> retiredPaths = Map.of(
+                "staging", "stage() in the act's Ink",
+                "quests", "journal() in the act's Ink",
+                "actors", "cast() in the act's Ink",
+                "flags.yaml", "VAR declarations in the act's Ink (shared ones in baseline world.ink)");
+        Set<String> retiredManifestKeys = Set.of("flags", "requiresFlags");
+        Set<String> retiredProvidesKeys = Set.of("entryMap", "entrySpawn", "gateFlag");
         List<String> errors = new ArrayList<>();
         for (File pack : packDirs()) {
-            for (String flag : stringList(loadYaml(new File(pack, "pack.yaml")).get("requiresFlags"))) {
-                if (!declared.contains(flag)) {
-                    errors.add(pack.getName() + " requiresFlags '" + flag + "' is declared by no pack");
+            for (Map.Entry<String, String> e : retiredPaths.entrySet()) {
+                if (new File(pack, e.getKey()).exists()) {
+                    errors.add(pack.getName() + "/" + e.getKey() + " is retired; use " + e.getValue());
+                }
+            }
+            Map<String, Object> manifest = loadYaml(new File(pack, "pack.yaml"));
+            for (String key : retiredManifestKeys) {
+                if (manifest.containsKey(key)) {
+                    errors.add(pack.getName() + "/pack.yaml: '" + key + "' is retired (story state is Ink variables)");
+                }
+            }
+            if (manifest.get("provides") instanceof List<?> provides) {
+                for (Object o : provides) {
+                    if (!(o instanceof Map<?, ?> p)) continue;
+                    for (String key : retiredProvidesKeys) {
+                        if (p.containsKey(key)) {
+                            errors.add(pack.getName() + "/pack.yaml provides: '" + key
+                                    + "' is retired (an act begins where its Ink's '# entry:' tag says)");
+                        }
+                    }
                 }
             }
         }

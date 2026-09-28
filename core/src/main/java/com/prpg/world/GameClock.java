@@ -4,31 +4,18 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 
 /**
- * The in-fiction clock. Tracks the current day and the wall-clock time of the last save, which the
- * epilogue's daily-duty loop will need for offline-progression and seasonal events. Persisted by
- * {@code SaveManager}; reset on a new game.
+ * The real-world clock: when the game was last played. An epilogue's daily-duty loop needs it for
+ * offline progression and seasonal events. (The in-fiction day is story state: the Ink variable
+ * {@code day} in {@code baseline/ink/common/world.ink}.) Persisted by {@code SaveManager}; reset on a
+ * new game.
  */
 @Singleton
 public class GameClock {
 
-    private int day = 1;
     private long lastPlayedMillis;
 
     @Inject
     public GameClock() {}
-
-    public int getDay() {
-        return day;
-    }
-
-    public void setDay(int day) {
-        this.day = Math.max(1, day);
-    }
-
-    /** Advances to the next day; returns the new day number. */
-    public int advanceDay() {
-        return ++day;
-    }
 
     public long getLastPlayedMillis() {
         return lastPlayedMillis;
@@ -45,7 +32,6 @@ public class GameClock {
     }
 
     public void reset() {
-        day = 1;
         lastPlayedMillis = 0;
     }
 }

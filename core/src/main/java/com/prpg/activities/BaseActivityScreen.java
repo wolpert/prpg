@@ -20,8 +20,9 @@ import javax.inject.Provider;
 /**
  * Shared scaffolding for Scene2D-driven <b>full-screen</b> activities (match-3, merge, ...): the
  * density-scaled stage, YAML definition loading, the ESC/BACK-to-world listener, fit-to-screen grid
- * math ({@link GridLayout}), the win-pause-then-return timer, and the standard lifecycle. Subclasses
- * supply the board dimensions and per-frame logic.
+ * math ({@link GridLayout}), the win-pause-then-return timer, the won/running result the story reads,
+ * and the standard lifecycle. Subclasses supply the board dimensions and per-frame logic, and call
+ * {@link #markWon()} on a solve.
  */
 public abstract class BaseActivityScreen implements FullScreenActivity {
 
@@ -31,31 +32,28 @@ public abstract class BaseActivityScreen implements FullScreenActivity {
     protected final ColorTextures colorTextures;
     protected final ConfigLoader configLoader;
     protected final ContentResolver content;
-    protected final OnCompleteApplier onComplete;
     protected final Provider<ScreenNavigator> nav;
 
     protected final Stage stage;
     protected final GridLayout grid = new GridLayout();
-
-    /** Dialogue queued by a just-completed activity's on_complete block; consumed by the world on return. */
-    protected String pendingDialogue;
 
     /** The id of the activity currently loaded (set by {@link #loadDefinition}); used in log messages. */
     protected String activityId;
 
     private float winPauseTimer;
     private boolean winPausing;
+    private boolean running;
+    private boolean solved;
 
     protected BaseActivityScreen(SpriteBatch batch, Skin skin, Fonts fonts, ColorTextures colorTextures,
                                  ConfigLoader configLoader, ContentResolver content,
-                                 OnCompleteApplier onComplete, Provider<ScreenNavigator> nav) {
+                                 Provider<ScreenNavigator> nav) {
         this.batch = batch;
         this.skin = skin;
         this.fonts = fonts;
         this.colorTextures = colorTextures;
         this.configLoader = configLoader;
         this.content = content;
-        this.onComplete = onComplete;
         this.nav = nav;
 
         ScreenViewport viewport = new ScreenViewport();
@@ -72,9 +70,14 @@ public abstract class BaseActivityScreen implements FullScreenActivity {
         return SAFE_TOP_BASE + Gdx.graphics.getSafeInsetTop() / density;
     }
 
-    /** Loads an activity definition POJO from {@code activities/<type>/<activityId>.yaml}. */
+    /**
+     * Loads an activity definition POJO from {@code activities/<type>/<activityId>.yaml}. Every
+     * {@code launch} calls this first, so it also starts a fresh run.
+     */
     protected <T> T loadDefinition(String type, Class<T> defType, String activityId) {
         this.activityId = activityId;
+        this.running = true;
+        this.solved = false;
         String path = "activities/" + type + "/" + activityId + ".yaml";
         try (Reader reader = content.resolve(path).reader()) {
             T def = configLoader.load(defType, reader);
@@ -87,10 +90,18 @@ public abstract class BaseActivityScreen implements FullScreenActivity {
     }
 
     @Override
-    public String consumePendingDialogue() {
-        String d = pendingDialogue;
-        pendingDialogue = null;
-        return d;
+    public boolean isRunning() {
+        return running;
+    }
+
+    @Override
+    public boolean wasWon() {
+        return solved;
+    }
+
+    /** Records the solve; the story reads it once the player is back in the world. */
+    protected void markWon() {
+        solved = true;
     }
 
     /** Routes input to the stage and wires ESC/BACK to return to the world. Call from {@code show()}. */
@@ -112,6 +123,7 @@ public abstract class BaseActivityScreen implements FullScreenActivity {
 
     /** Returns to the world screen via the shared registry route (no concrete-screen coupling). */
     protected void leaveToWorld() {
+        running = false;
         nav.get().goToWorld();
     }
 

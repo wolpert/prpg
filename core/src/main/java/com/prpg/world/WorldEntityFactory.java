@@ -10,7 +10,6 @@ import com.badlogic.gdx.math.Rectangle;
 import com.prpg.ecs.component.AnimationComponent;
 import com.prpg.ecs.component.CollisionComponent;
 import com.prpg.ecs.component.InteractableComponent;
-import com.prpg.ecs.component.NpcComponent;
 import com.prpg.ecs.component.OrientationComponent;
 import com.prpg.ecs.component.PlayerComponent;
 import com.prpg.ecs.component.PortalComponent;
@@ -29,10 +28,11 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 
 /**
- * Builds the player entity and spawns map content: the map's own object layers (props in
- * {@code npcs}, {@code items}, {@code activities}, {@code triggers}, {@code portals}) plus the act's
- * staged content. The player's collision box (feet) is offset within the larger sprite; these
- * offsets are the single source of truth for spawn/save symmetry.
+ * Builds the player entity and spawns map content: the map's own portals plus whatever the current
+ * act's Ink {@code stage()} places (actors, things, zones). A map holds only geography (terrain,
+ * collision, spawns, portals, markers); everything the story controls is staged, so the same map can
+ * be populated differently as the story moves on. The player's collision box (feet) is offset within
+ * the larger sprite; these offsets are the single source of truth for spawn/save symmetry.
  */
 @Singleton
 public class WorldEntityFactory {
@@ -42,15 +42,13 @@ public class WorldEntityFactory {
     public static final float COLLISION_OFFSET_X = 18f;
     public static final float COLLISION_OFFSET_Y = 2f;
 
-    /** Interactable types the world screen handles itself (anything else is an activity type). */
-    public static final String TYPE_NPC = "npc";
-    public static final String TYPE_ITEM = "item";
+    /** Swatch for a thing the story staged without a {@code define()} look. */
+    private static final String DEFAULT_THING_COLOR = "6B4A2B";
 
     private final Engine engine;
     private final MapManager mapManager;
     private final ColorTextures colorTextures;
     private final ItemRegistry itemRegistry;
-    private final FlagStore flagStore;
     private final PlayerSprites playerSprites;
     private final ActorSprites actorSprites;
     private final StageDirector stageDirector;
@@ -60,14 +58,12 @@ public class WorldEntityFactory {
 
     @Inject
     public WorldEntityFactory(Engine engine, MapManager mapManager, ColorTextures colorTextures,
-                              ItemRegistry itemRegistry, FlagStore flagStore,
-                              PlayerSprites playerSprites, ActorSprites actorSprites,
-                              StageDirector stageDirector) {
+                              ItemRegistry itemRegistry, PlayerSprites playerSprites,
+                              ActorSprites actorSprites, StageDirector stageDirector) {
         this.engine = engine;
         this.mapManager = mapManager;
         this.colorTextures = colorTextures;
         this.itemRegistry = itemRegistry;
-        this.flagStore = flagStore;
         this.playerSprites = playerSprites;
         this.actorSprites = actorSprites;
         this.stageDirector = stageDirector;
@@ -109,22 +105,18 @@ public class WorldEntityFactory {
     }
 
     /**
-     * Spawns everything on the current map: the map's own static content (props, portals) plus the
-     * act's staged content. {@code player} may be null (nothing is standing anywhere yet).
+     * Spawns everything on the current map: its portals plus the story's staged content.
+     * {@code player} may be null (nothing is standing anywhere yet).
      */
     public void spawnMapContent(Entity player) {
-        spawnNpcs();
-        spawnItems();
-        spawnActivityLaunchers();
-        spawnTriggers();
         spawnPortals();
         spawnStaged(player);
     }
 
     /**
-     * Rebuilds only the act-staged entities, leaving the player, props and portals untouched. This is
-     * the path taken when a flag changes or Ink moves someone mid-play: placement <em>and</em>
-     * solidity are re-derived, so a path can open or close without reloading the map.
+     * Rebuilds only the staged entities, leaving the player and portals untouched. This is the path
+     * taken whenever the story moves on: placement <em>and</em> solidity are re-derived, so a path can
+     * open or close without reloading the map.
      */
     public void refreshStaged(Entity player) {
         List<Entity> stale = new ArrayList<>();
@@ -138,7 +130,7 @@ public class WorldEntityFactory {
         spawnStaged(player);
     }
 
-    /** Builds this act's staged content for the current map (see {@link StageDirector}). */
+    /** Builds the story's staged content for the current map (see {@link StageDirector}). */
     private void spawnStaged(Entity player) {
         Rectangle box = playerCollisionBox(player);
         for (StagedPlacement p : stageDirector.stagedFor(mapManager.getCurrentMapId())) {
@@ -149,16 +141,14 @@ public class WorldEntityFactory {
                 continue;
             }
             switch (p.kind()) {
-                case ACTOR -> spawnStagedActor(p, at, box);
-                case OBSTACLE -> spawnStagedObstacle(p, at, box);
-                case ITEM -> spawnStagedItem(p, at);
-                case TRIGGER -> spawnStagedTrigger(p, at);
-                case PROP -> { /* props are map-owned; staging only overrides their dialogue */ }
+                case ACTOR -> spawnActor(p, at);
+                case THING -> spawnThing(p, at, box);
+                case ZONE -> spawnZone(p, at);
             }
         }
     }
 
-    private void spawnStagedActor(StagedPlacement p, Rectangle at, Rectangle box) {
+    private void spawnActor(StagedPlacement p, Rectangle at) {
         Entity actor = engine.createEntity();
         addPosition(actor, at.x, at.y, 1);
 
@@ -166,8 +156,8 @@ public class WorldEntityFactory {
         TextureComponent tex = engine.createComponent(TextureComponent.class);
         CollisionComponent col = engine.createComponent(CollisionComponent.class);
 
-        // Real art when the actor declares a sprite, the colour swatch otherwise, so content can be
-        // authored and played before its art exists, and gains the art with no content edit.
+        // Real art when cast() gives a sprite, the colour swatch otherwise, so a story can be played
+        // before its art exists, and gains the art with no story edit.
         CharacterSprites sprites = actorSprites.get(p.sprite());
         if (sprites != null) {
             int dir = CharacterSprites.directionIndex(OrientationComponent.Direction.DOWN);
@@ -193,65 +183,46 @@ public class WorldEntityFactory {
         actor.add(tex);
         actor.add(col);
 
-        if (p.dialogue() != null) {
-            NpcComponent npc = engine.createComponent(NpcComponent.class);
-            npc.dialogueId = p.dialogue();
-            actor.add(npc);
-            addInteractable(actor, TYPE_NPC, p.dialogue());
-        }
+        if (p.knot() != null) addInteractable(actor, p.id(), p.knot());
         addStaged(actor, p.id());
         engine.addEntity(actor);
-        if (p.solid()) mapManager.addBlocker(at, box);
     }
 
-    private void spawnStagedObstacle(StagedPlacement p, Rectangle at, Rectangle box) {
-        Entity obstacle = engine.createEntity();
-        addPosition(obstacle, at.x, at.y, 0);
+    private void spawnThing(StagedPlacement p, Rectangle at, Rectangle box) {
+        Entity thing = engine.createEntity();
+        addPosition(thing, at.x, at.y, 0);
 
         int size = (int) Math.max(at.width, 16);
         TextureComponent tex = engine.createComponent(TextureComponent.class);
-        tex.region = colorTextures.swatch(p.color() != null ? p.color() : "4E6B3A", size);
-        obstacle.add(tex);
+        CharacterSprites sprites = actorSprites.get(p.sprite());
+        if (sprites != null) {
+            tex.region = sprites.idle(CharacterSprites.directionIndex(OrientationComponent.Direction.DOWN));
+        } else if (p.color() != null) {
+            tex.region = colorTextures.swatch(p.color(), size);
+        } else if (itemRegistry.exists(p.id())) {
+            // A thing staged under an item id with no look of its own shows that item's icon.
+            tex.region = itemRegistry.icon(p.id());
+        } else {
+            tex.region = colorTextures.swatch(DEFAULT_THING_COLOR, size);
+        }
+        thing.add(tex);
 
         CollisionComponent col = engine.createComponent(CollisionComponent.class);
         col.w = at.width;
         col.h = at.height;
-        obstacle.add(col);
+        thing.add(col);
 
-        // An obstacle interacts as its activity when it has one, else as plain dialogue.
-        if (p.hasActivity()) {
-            addInteractable(obstacle, p.activityType(), p.activityId());
-        } else if (p.dialogue() != null) {
-            addInteractable(obstacle, TYPE_NPC, p.dialogue());
-        }
-        addStaged(obstacle, p.id());
-        engine.addEntity(obstacle);
+        if (p.knot() != null) addInteractable(thing, p.id(), p.knot());
+        addStaged(thing, p.id());
+        engine.addEntity(thing);
         if (p.solid()) mapManager.addBlocker(at, box);
     }
 
-    private void spawnStagedItem(StagedPlacement p, Rectangle at) {
-        if (!itemRegistry.exists(p.itemId())) {
-            Log.info("WorldEntityFactory", "staged item references unknown itemId '" + p.itemId() + "'; not spawned");
+    private void spawnZone(StagedPlacement p, Rectangle at) {
+        if (p.knot() == null) {
+            Log.info("WorldEntityFactory", "zone '" + p.id() + "' has no knot; a zone only runs a knot, so not spawned");
             return;
         }
-        Entity item = engine.createEntity();
-        addPosition(item, at.x, at.y, 0);
-
-        TextureComponent tex = engine.createComponent(TextureComponent.class);
-        tex.region = itemRegistry.icon(p.itemId());
-        item.add(tex);
-
-        CollisionComponent col = engine.createComponent(CollisionComponent.class);
-        col.w = 16f;
-        col.h = 16f;
-        item.add(col);
-
-        addInteractable(item, TYPE_ITEM, p.itemId());
-        addStaged(item, p.id());
-        engine.addEntity(item);
-    }
-
-    private void spawnStagedTrigger(StagedPlacement p, Rectangle at) {
         Entity zone = engine.createEntity();
         addPosition(zone, at.x, at.y, 0);
 
@@ -262,10 +233,7 @@ public class WorldEntityFactory {
 
         TriggerComponent trigger = engine.createComponent(TriggerComponent.class);
         trigger.id = p.id();
-        trigger.setFlag = p.setFlag();
-        trigger.requireFlag = p.requireFlag();
-        trigger.fireOnce = p.fireOnce();
-        trigger.event = p.event();
+        trigger.knot = p.knot();
         zone.add(trigger);
 
         zone.add(debugZoneTexture((int) Math.max(at.width, 8)));
@@ -290,10 +258,10 @@ public class WorldEntityFactory {
         entity.add(pos);
     }
 
-    private void addInteractable(Entity entity, String type, String id) {
+    private void addInteractable(Entity entity, String id, String knot) {
         InteractableComponent inter = engine.createComponent(InteractableComponent.class);
-        inter.type = type;
         inter.id = id;
+        inter.knot = knot;
         entity.add(inter);
     }
 
@@ -310,158 +278,7 @@ public class WorldEntityFactory {
         return tex;
     }
 
-    // --- map-owned object layers (the legacy / prop path) ------------------------------------------
-
-    private void spawnNpcs() {
-        MapObjects npcs = mapManager.getObjectLayer("npcs");
-        if (npcs == null) return;
-        for (MapObject obj : npcs) {
-            if (!(obj instanceof RectangleMapObject rmo)) continue;
-            Rectangle r = rmo.getRectangle();
-            String dialogueId = obj.getProperties().get("dialogueId", String.class);
-            // A prop's knot lives in one act's story, but the prop itself is map-owned and outlives
-            // that act. Let the current act re-voice (or silence) it.
-            StagedPlacement override = stageDirector.propOverride(obj.getName());
-            if (override != null) {
-                dialogueId = override.dialogue();
-            }
-            if (dialogueId == null) {
-                Log.debug("WorldEntityFactory",
-                        "skipping NPC object '" + obj.getName() + "' on '" + mapManager.getCurrentMapId() + "': no dialogueId");
-                continue;
-            }
-
-            Entity npc = engine.createEntity();
-            addPosition(npc, r.x, r.y, 1);
-
-            String color = obj.getProperties().get("color", String.class);
-            TextureComponent tex = engine.createComponent(TextureComponent.class);
-            CollisionComponent col = engine.createComponent(CollisionComponent.class);
-            if (color != null) {
-                int size = (int) Math.max(r.width, 16);
-                tex.region = colorTextures.swatch(color, size);
-                col.w = size;
-                col.h = size;
-            } else {
-                tex.region = playerSprites.idle(0);
-                col.w = 16f;
-                col.h = 16f;
-                col.offsetX = 16f;
-            }
-            npc.add(tex);
-            npc.add(col);
-
-            NpcComponent npcComp = engine.createComponent(NpcComponent.class);
-            npcComp.dialogueId = dialogueId;
-            npc.add(npcComp);
-
-            addInteractable(npc, TYPE_NPC, dialogueId);
-            engine.addEntity(npc);
-        }
-    }
-
-    private void spawnItems() {
-        MapObjects items = mapManager.getObjectLayer("items");
-        if (items == null) return;
-        for (MapObject obj : items) {
-            if (!(obj instanceof RectangleMapObject rmo)) continue;
-            Rectangle r = rmo.getRectangle();
-            String itemId = obj.getProperties().get("itemId", String.class);
-            if (itemId == null || !itemRegistry.exists(itemId)) {
-                if (itemId != null) {
-                    Log.info("WorldEntityFactory", "item object on '" + mapManager.getCurrentMapId()
-                            + "' references unknown itemId '" + itemId + "'; not spawned");
-                }
-                continue;
-            }
-
-            Entity item = engine.createEntity();
-            addPosition(item, r.x, r.y, 0);
-
-            TextureComponent tex = engine.createComponent(TextureComponent.class);
-            tex.region = itemRegistry.icon(itemId);
-            item.add(tex);
-
-            CollisionComponent col = engine.createComponent(CollisionComponent.class);
-            col.w = 16f;
-            col.h = 16f;
-            item.add(col);
-
-            addInteractable(item, TYPE_ITEM, itemId);
-            engine.addEntity(item);
-        }
-    }
-
-    /**
-     * Map-owned activity launchers ({@code activities} object layer: {@code type}, {@code activityId},
-     * optional {@code clearedFlag}). A staged obstacle is the preferred way to place one, because only
-     * staging can block movement; this layer remains for simple "walk up and play" spots.
-     */
-    private void spawnActivityLaunchers() {
-        MapObjects launchers = mapManager.getObjectLayer("activities");
-        if (launchers == null) return;
-        for (MapObject obj : launchers) {
-            if (!(obj instanceof RectangleMapObject rmo)) continue;
-            String type = obj.getProperties().get("type", String.class);
-            String activityId = obj.getProperties().get("activityId", String.class);
-            if (type == null || activityId == null) {
-                Log.info("WorldEntityFactory",
-                        "activity object on '" + mapManager.getCurrentMapId() + "' missing type/activityId; not spawned");
-                continue;
-            }
-
-            // Skip already-cleared content so it stays gone after solving.
-            String clearedFlag = obj.getProperties().get("clearedFlag", String.class);
-            if (clearedFlag != null && flagStore.hasFlag(clearedFlag)) continue;
-
-            Rectangle r = rmo.getRectangle();
-            Entity marker = engine.createEntity();
-            addPosition(marker, r.x, r.y, 0);
-
-            int size = (int) Math.max(r.width, 16);
-            String color = obj.getProperties().get("color", String.class);
-            TextureComponent tex = engine.createComponent(TextureComponent.class);
-            tex.region = colorTextures.swatch(color != null ? color : "6B4A2B", size);
-            marker.add(tex);
-
-            CollisionComponent col = engine.createComponent(CollisionComponent.class);
-            col.w = size;
-            col.h = size;
-            marker.add(col);
-
-            addInteractable(marker, type, activityId);
-            engine.addEntity(marker);
-        }
-    }
-
-    private void spawnTriggers() {
-        MapObjects triggers = mapManager.getObjectLayer("triggers");
-        if (triggers == null) return;
-        for (MapObject obj : triggers) {
-            if (!(obj instanceof RectangleMapObject rmo)) continue;
-            Rectangle r = rmo.getRectangle();
-
-            Entity zone = engine.createEntity();
-            addPosition(zone, r.x, r.y, 0);
-
-            CollisionComponent col = engine.createComponent(CollisionComponent.class);
-            col.w = r.width;
-            col.h = r.height;
-            zone.add(col);
-
-            TriggerComponent trigger = engine.createComponent(TriggerComponent.class);
-            trigger.id = obj.getName();
-            trigger.setFlag = obj.getProperties().get("set_flag", String.class);
-            trigger.requireFlag = obj.getProperties().get("require_flag", String.class);
-            Boolean once = obj.getProperties().get("fire_once", Boolean.class);
-            trigger.fireOnce = once != null && once;
-            trigger.event = obj.getProperties().get("event", String.class);
-            zone.add(trigger);
-
-            zone.add(debugZoneTexture((int) Math.max(r.width, 8)));
-            engine.addEntity(zone);
-        }
-    }
+    // --- map-owned portals --------------------------------------------------------------------
 
     private void spawnPortals() {
         MapObjects portals = mapManager.getObjectLayer("portals");
@@ -479,9 +296,9 @@ public class WorldEntityFactory {
             zone.add(col);
 
             PortalComponent portal = engine.createComponent(PortalComponent.class);
+            portal.name = obj.getName();
             portal.targetMap = obj.getProperties().get("target_map", String.class);
             portal.targetSpawn = obj.getProperties().get("target_spawn", String.class);
-            portal.requireFlag = obj.getProperties().get("require_flag", String.class);
             zone.add(portal);
 
             TextureComponent tex = engine.createComponent(TextureComponent.class);

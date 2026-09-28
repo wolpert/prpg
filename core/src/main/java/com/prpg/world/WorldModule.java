@@ -10,6 +10,12 @@ import com.prpg.di.ScreenKey;
 import com.prpg.ecs.system.InteractionSystem;
 import com.prpg.ecs.system.PlayerMovementSystem;
 import com.prpg.ecs.system.TriggerSystem;
+import com.prpg.narrative.StoryCommand;
+import com.prpg.world.command.CutsceneCommand;
+import com.prpg.world.command.FadeCommand;
+import com.prpg.world.command.GoCommand;
+import com.prpg.world.command.PlayCommand;
+import com.prpg.world.command.WaitCommand;
 import com.prpg.world.scene.FadeBeatEvent;
 import com.prpg.world.scene.ScriptedEvent;
 import dagger.Module;
@@ -20,10 +26,11 @@ import dagger.multibindings.StringKey;
 import javax.inject.Singleton;
 
 /**
- * Gameplay wiring. Three string-keyed registries live here and are the seams content refers to by
- * name: scripted events (a trigger's {@code event} / an Ink {@code # event:} tag), full-screen
- * activities and popup activities (an obstacle's {@code activity.type}). Add a binding, and the
- * matching string starts working in content; nothing in {@code WorldScreen} changes.
+ * Gameplay wiring. Four string-keyed registries live here and are the seams stories refer to by
+ * name: story commands (the first word of an Ink {@code >>>} line), full-screen activities and popup
+ * activities ({@code >>> play <type> <id>}), and scripted events ({@code >>> cutscene <id>}). Add a
+ * binding, and the matching word starts working in Ink; nothing in {@code WorldScreen} changes.
+ * A new command also goes in {@code world/command/Commands.ALL} so the validators know it.
  */
 @Module
 public class WorldModule {
@@ -59,7 +66,24 @@ public class WorldModule {
     @Provides @Singleton @IntoMap @StringKey(LightsOutPopup.TYPE)
     static PopupActivity bindLightsOutActivity(LightsOutPopup p) { return p; }
 
-    // --- scripted events (cutscenes), keyed by the id content references ---------------------------
+    // --- story commands: `>>> <name> args...` lines in Ink --------------------------------------------
+
+    @Provides @Singleton @IntoMap @StringKey(PlayCommand.NAME)
+    static StoryCommand bindPlayCommand(PlayCommand c) { return c; }
+
+    @Provides @Singleton @IntoMap @StringKey(GoCommand.NAME)
+    static StoryCommand bindGoCommand(GoCommand c) { return c; }
+
+    @Provides @Singleton @IntoMap @StringKey(WaitCommand.NAME)
+    static StoryCommand bindWaitCommand(WaitCommand c) { return c; }
+
+    @Provides @Singleton @IntoMap @StringKey(FadeCommand.NAME)
+    static StoryCommand bindFadeCommand(FadeCommand c) { return c; }
+
+    @Provides @Singleton @IntoMap @StringKey(CutsceneCommand.NAME)
+    static StoryCommand bindCutsceneCommand(CutsceneCommand c) { return c; }
+
+    // --- scripted events (cutscenes), keyed by the id `>>> cutscene <id>` names -------------------------
 
     @Provides @Singleton @IntoMap @StringKey(FadeBeatEvent.ID)
     static ScriptedEvent bindFadeBeat(FadeBeatEvent e) { return e; }

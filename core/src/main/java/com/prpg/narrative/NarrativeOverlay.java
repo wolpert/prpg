@@ -21,13 +21,12 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 
 /**
- * Scene2D overlay for Ink-driven narrative — the live-path replacement for {@code DialogueOverlay},
- * driven by {@link NarrativeRunner} instead of the YAML runner. Kept as a separate class (rather than
- * retrofitting the old overlay) so the YAML system stays intact and the swap is revertable.
+ * Scene2D overlay for Ink conversations, driven by {@link NarrativeRunner}: the speaker, the line, and
+ * the choices. Hidden (and not hit-testable) while the story waits on a command such as
+ * {@code >>> play}, so an activity or cutscene gets the screen and the input.
  *
- * <p>Localization/variables still apply at the display boundary: {@code Strings.resolve} (i18n keys)
- * then {@code TextVars.apply} ({@code {day}}/{@code {investigator}}), exactly as before — so Ink lines
- * can carry the same keys/tokens the YAML lines did.
+ * <p>Localization/variables apply at the display boundary: {@code Strings.resolve} (i18n keys) then
+ * {@code TextVars.apply} ({@code {name}} story variables).
  */
 @Singleton
 public class NarrativeOverlay {
@@ -77,7 +76,7 @@ public class NarrativeOverlay {
         dialogueBox.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                if (runner.isActive() && !runner.hasChoices()) {
+                if (runner.isShowingLine() && !runner.hasChoices()) {
                     runner.advance();
                 }
             }
@@ -99,7 +98,7 @@ public class NarrativeOverlay {
     }
 
     public boolean isActive() {
-        return runner.isActive();
+        return runner.isShowingLine();
     }
 
     public Stage getStage() {
@@ -107,9 +106,10 @@ public class NarrativeOverlay {
     }
 
     public void update(float delta) {
-        // Capture touches only while a line is showing, so taps fall through to world steering otherwise.
-        root.setTouchable(runner.isActive() ? Touchable.enabled : Touchable.disabled);
-        if (!runner.isActive()) {
+        // Capture touches only while a line is showing, so taps fall through to world steering (or a
+        // popup activity the story is waiting on) otherwise.
+        root.setTouchable(runner.isShowingLine() ? Touchable.enabled : Touchable.disabled);
+        if (!runner.isShowingLine()) {
             lastRenderedTurn = -1;
             return;
         }
@@ -129,7 +129,7 @@ public class NarrativeOverlay {
     }
 
     public void draw() {
-        if (!runner.isActive()) return;
+        if (!runner.isShowingLine()) return;
         stage.draw();
     }
 

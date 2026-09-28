@@ -73,10 +73,6 @@
    </properties>
   </object>
  </objectgroup>
- <objectgroup id="6" name="npcs"/>
- <objectgroup id="7" name="items"/>
- <objectgroup id="8" name="activities"/>
- <objectgroup id="9" name="triggers"/>
  <objectgroup id="10" name="markers">
   <object id="10" name="keeper_post" type="Marker" x="112" y="144" width="16" height="16"/>
   <object id="11" name="hall_door" type="Marker" x="160" y="16" width="16" height="16"/>

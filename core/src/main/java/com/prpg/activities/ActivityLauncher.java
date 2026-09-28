@@ -15,6 +15,9 @@ import javax.inject.Singleton;
  * registries feed it, both multibound in {@code WorldModule}: full-screen activities (navigated to
  * as screens) and popup activities (opened over the world). A new activity type is one binding
  * into the matching map; nothing in {@code WorldScreen} changes.
+ *
+ * <p>The story is the only caller ({@code >>> play <type> <id>}, see {@code PlayCommand}): it launches
+ * here, waits while {@link #isRunning()}, then reads {@link #wasWon()}.
  */
 @Singleton
 public class ActivityLauncher {
@@ -24,6 +27,8 @@ public class ActivityLauncher {
     private final Provider<ScreenNavigator> nav;
 
     private PopupActivity activePopup;
+    /** The most recently launched activity, full-screen or popup. */
+    private Activity current;
 
     @Inject
     public ActivityLauncher(Map<String, FullScreenActivity> screens, Map<String, PopupActivity> popups,
@@ -49,18 +54,30 @@ public class ActivityLauncher {
             popup.launch(activityId);
             popup.open();
             activePopup = popup;
+            current = popup;
             Log.debug("ActivityLauncher", "opened popup activity " + type + "/" + activityId);
             return true;
         }
         FullScreenActivity screen = screens.get(type);
         if (screen != null) {
             screen.launch(activityId);
+            current = screen;
             nav.get().goTo(screen.screenKey());
             Log.debug("ActivityLauncher", "launched full-screen activity " + type + "/" + activityId);
             return true;
         }
         Log.error("ActivityLauncher", "unknown activity type \"" + type + "\" (id=" + activityId + ")");
         return false;
+    }
+
+    /** True while the most recently launched activity is still being played. */
+    public boolean isRunning() {
+        return current != null && current.isRunning();
+    }
+
+    /** Whether the most recently launched activity was solved (false if none ran). */
+    public boolean wasWon() {
+        return current != null && current.wasWon();
     }
 
     /** True while a popup activity is open over the world. */
@@ -94,19 +111,6 @@ public class ActivityLauncher {
         List<Stage> out = new ArrayList<>();
         for (PopupActivity p : popups.values()) out.add(p.getStage());
         return out;
-    }
-
-    /** First pending barked dialogue across all activities, consumed on read. */
-    public String consumePendingDialogue() {
-        for (FullScreenActivity screen : screens.values()) {
-            String dialogue = screen.consumePendingDialogue();
-            if (dialogue != null) return dialogue;
-        }
-        for (PopupActivity popup : popups.values()) {
-            String dialogue = popup.consumePendingDialogue();
-            if (dialogue != null) return dialogue;
-        }
-        return null;
     }
 
     public void dispose() {

@@ -6,7 +6,3 @@ board: { width: 3, height: 3 }
 scramble: 4                    # random presses from the solved state (difficulty)
 lit_color: E8C860
 unlit_color: 2A2E38
-on_complete:
-  give_item: brass_token       # granted the first time only (set_flag makes it one-time)
-  set_flag: act1.strongbox_opened
-  dialogue: strongbox_opened

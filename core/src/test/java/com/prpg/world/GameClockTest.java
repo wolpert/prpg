@@ -7,20 +7,10 @@ import org.junit.jupiter.api.Test;
 class GameClockTest {
 
     @Test
-    void startsAtDayOneAndAdvances() {
+    void resetForgetsTheLastPlayedTime() {
         GameClock clock = new GameClock();
-        assertEquals(1, clock.getDay());
-        assertEquals(2, clock.advanceDay());
-        assertEquals(2, clock.getDay());
-    }
-
-    @Test
-    void resetReturnsToDayOne() {
-        GameClock clock = new GameClock();
-        clock.advanceDay();
         clock.setLastPlayedMillis(123L);
         clock.reset();
-        assertEquals(1, clock.getDay());
         assertEquals(0L, clock.getLastPlayedMillis());
     }
 

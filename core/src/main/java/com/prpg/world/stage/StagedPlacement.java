@@ -1,9 +1,8 @@
 package com.prpg.world.stage;
 
 /**
- * A fully resolved "this is in the world right now" record: the flat, condition-free answer
- * {@link StageDirector} hands to the entity factory once the {@code when}/{@code unless} rules and
- * any imperative overrides have been applied.
+ * A fully resolved "this is in the world right now" record: one call the act's Ink {@code stage()}
+ * function made, joined with that id's look from {@code cast()}.
  *
  * <p>Immutable and libGDX-free, so the whole resolution path is unit-testable headless. Marker
  * coordinates are deliberately <em>not</em> resolved here: a placement names a map and a marker,
@@ -11,60 +10,22 @@ package com.prpg.world.stage;
  */
 public record StagedPlacement(
         Kind kind,
-        // Actor id, obstacle id, trigger id, or prop name: the stable handle overrides key on.
+        // The stable handle the story used: actor id, thing id or zone id.
         String id,
         String mapId,
         String marker,
-        // Ink knot to run on interact, or null.
-        String dialogue,
+        // Ink knot run on interact (actor, thing) or on walking in (zone); null for silent scenery.
+        String knot,
+        // Blocks player movement while staged (things only).
         boolean solid,
-        // Placeholder swatch colour (6-hex, no '#'), or null.
-        String color,
-        // Sprite descriptor for an actor with real art, or null.
+        // Sprite descriptor (sprites/<sprite>.sprite.yaml) from cast(), or null.
         String sprite,
-        // ActivityLauncher key ("match3"/"merge"/"lightsout"/...) for an obstacle that launches one.
-        String activityType,
-        String activityId,
-        String itemId,
-        String setFlag,
-        String requireFlag,
-        boolean fireOnce,
-        String event) {
+        // Placeholder swatch colour (6-hex, no '#') from cast(), or null.
+        String color) {
 
-    public enum Kind { ACTOR, OBSTACLE, ITEM, TRIGGER, PROP }
-
-    public static StagedPlacement actor(String id, String mapId, String marker, String dialogue,
-                                        boolean solid, String color, String sprite) {
-        return new StagedPlacement(Kind.ACTOR, id, mapId, marker, dialogue, solid, color, sprite,
-                null, null, null, null, null, false, null);
-    }
-
-    public static StagedPlacement obstacle(String id, String mapId, String marker, String dialogue,
-                                           boolean solid, String color,
-                                           String activityType, String activityId) {
-        return new StagedPlacement(Kind.OBSTACLE, id, mapId, marker, dialogue, solid, color, null,
-                activityType, activityId, null, null, null, false, null);
-    }
-
-    public static StagedPlacement item(String itemId, String mapId, String marker) {
-        return new StagedPlacement(Kind.ITEM, itemId, mapId, marker, null, false, null, null,
-                null, null, itemId, null, null, false, null);
-    }
-
-    public static StagedPlacement trigger(String id, String mapId, String marker, String setFlag,
-                                          String requireFlag, boolean fireOnce, String event) {
-        return new StagedPlacement(Kind.TRIGGER, id, mapId, marker, null, false, null, null,
-                null, null, null, setFlag, requireFlag, fireOnce, event);
-    }
-
-    /** A prop override carries no position: the map owns where the prop stands. */
-    public static StagedPlacement prop(String name, String dialogue, boolean solid) {
-        return new StagedPlacement(Kind.PROP, name, null, null, dialogue, solid, null, null,
-                null, null, null, null, null, false, null);
-    }
-
-    /** Whether this placement launches an activity on interact. */
-    public boolean hasActivity() {
-        return activityType != null && activityId != null;
-    }
+    /**
+     * {@code ACTOR}: a character ({@code actor(...)}). {@code THING}: an object, optionally solid
+     * ({@code thing(...)}). {@code ZONE}: an invisible walk-in area ({@code zone(...)}).
+     */
+    public enum Kind { ACTOR, THING, ZONE }
 }

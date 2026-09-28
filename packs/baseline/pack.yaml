@@ -2,18 +2,15 @@
 schemaVersion: 1
 id: baseline
 kind: baseline
-version: 1
+version: 2
 bundled: true
 requiresBaseline: false
 provides: []
-flags: []
-requiresFlags: []
 files:
   - ATTRIBUTION.md
   - atlases/baseline.atlas
   - atlases/baseline.png
   - config/game.yaml
-  - flags.yaml
   - fonts/ATTRIBUTION.md
   - fonts/dialogue-bold.ttf
   - fonts/dialogue.ttf

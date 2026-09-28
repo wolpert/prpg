@@ -1,5 +1,6 @@
 package com.prpg.narrative;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -14,8 +15,6 @@ import com.prpg.content.config.PackManifest;
 import com.prpg.narrative.config.NarrativeManifest;
 import com.prpg.narrative.content.ActContentRegistry;
 import com.prpg.narrative.content.ActContentSource;
-import com.prpg.world.FlagStore;
-import com.prpg.world.stage.StageDirector;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -45,7 +44,7 @@ class ActProgressionTest {
     }
 
     private NarrativeState state;
-    private FlagStore flags;
+    private StoryVariables vars;
     private DefaultEntitlement entitlement;
     private FakeSource source;
     private ActContentRegistry registry;
@@ -54,14 +53,14 @@ class ActProgressionTest {
     @BeforeEach
     void setUp() {
         state = new NarrativeState();
-        flags = new FlagStore();
+        vars = new StoryVariables();
         source = new FakeSource();
         source.installed.add("act1"); // bundled; act2 and act3 are DLC
         registry = new ActContentRegistry(
                 new ConfigLoader(), mock(ContentResolver.class), mock(PackRegistry.class), source);
         registry.useManifest(manifest());
-        entitlement = new DefaultEntitlement(flags, source, registry);
-        progression = new ActProgression(state, entitlement, registry, mock(StageDirector.class));
+        entitlement = new DefaultEntitlement(vars, source, registry);
+        progression = new ActProgression(state, entitlement, registry);
     }
 
     private static NarrativeManifest manifest() {
@@ -129,20 +128,22 @@ class ActProgressionTest {
     }
 
     @Test
-    void selfDeclaringPackIsFoldedIntoCatalogWithItsEntryMap() {
+    void entitlementGrantIsAProfileVariableThatSurvivesANewGame() {
+        entitlement.grant("act2");
+        assertTrue(vars.isTrue(DefaultEntitlement.OWNS_PREFIX + "act2"));
+        vars.clearRun();
+        assertTrue(entitlement.owns("act2"), "meta_ state survives a new playthrough");
+    }
+
+    @Test
+    void selfDeclaringPackIsFoldedIntoCatalog() {
         PackRegistry packReg = mock(PackRegistry.class);
         PackManifest pm = new PackManifest();
         PackManifest.Provided bonus = new PackManifest.Provided();
         bonus.id = "act7";
         bonus.title = "The Bonus";
         bonus.order = 7;
-        bonus.entryMap = "bonus_field";
-        bonus.entrySpawn = "start";
-        // The catalogued act1 gets its entry map from its pack too.
-        PackManifest.Provided one = new PackManifest.Provided();
-        one.id = "act1";
-        one.entryMap = "gatehouse_yard";
-        pm.provides = List.of(bonus, one);
+        pm.provides = List.of(bonus);
         when(packReg.manifests()).thenReturn(List.of(pm));
 
         ActContentRegistry reg = new ActContentRegistry(
@@ -151,9 +152,23 @@ class ActProgressionTest {
 
         assertTrue(reg.isDeclared("act7"), "pack provides: is merged into the catalog");
         assertEquals("The Bonus", reg.entry("act7").title);
-        assertEquals("bonus_field", reg.entry("act7").entry_map);
-        assertEquals("gatehouse_yard", reg.entry("act1").entry_map, "catalog entry picks up the pack's entry map");
         assertEquals("act7", reg.nextActId("act3"), "the folded act joins the ordered spine");
         assertNull(reg.nextActId("act7"));
+    }
+
+    @Test
+    void anActBeginsWhereItsStorysEntryTagSays() {
+        ActContentRegistry reg = InkTestSupport.registry(InkTestSupport.sourceFor("act1", "act2"), "act1", "act2");
+        assertEquals("gatehouse_yard", reg.entry("act1").entry_map);
+        assertEquals("start", reg.entry("act1").entry_spawn);
+        assertEquals("road", reg.entry("act2").entry_map);
+    }
+
+    @Test
+    void entryTagParsing() {
+        assertArrayEquals(new String[]{"yard", "gate"}, ActContentRegistry.parseEntryTag(List.of("entry: yard gate")));
+        assertArrayEquals(new String[]{"yard", null}, ActContentRegistry.parseEntryTag(List.of("title: x", "entry:yard")));
+        assertNull(ActContentRegistry.parseEntryTag(List.of("entry:")));
+        assertNull(ActContentRegistry.parseEntryTag(List.of("author: someone")));
     }
 }

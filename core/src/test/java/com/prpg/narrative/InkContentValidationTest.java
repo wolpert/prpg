@@ -7,8 +7,6 @@ import static org.mockito.Mockito.mock;
 
 import com.bladecoder.ink.runtime.Story;
 import com.prpg.items.Inventory;
-import com.prpg.world.FlagStore;
-import com.prpg.world.GameClock;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -24,8 +22,10 @@ import org.yaml.snakeyaml.Yaml;
 
 /**
  * Guard rail for the Ink content: every act compiles, the bridge contract matches the Ink
- * {@code EXTERNAL} declarations both ways, every catalogued act has source, and every bundled act
- * has its compiled JSON committed (CI consumes committed JSON).
+ * {@code EXTERNAL} declarations both ways, every act still plays in Inky's preview (the fallbacks
+ * work), every catalogued act has source, and every bundled act has its compiled JSON committed (CI
+ * consumes committed JSON). What the stories <em>refer to</em> (maps, markers, activities, items) is
+ * checked by {@code InkWorldValidationTest}.
  */
 class InkContentValidationTest {
 
@@ -50,6 +50,7 @@ class InkContentValidationTest {
         Set<String> declared = declaredExternals();
         Set<String> bound = new LinkedHashSet<>(StateBridge.READ_FUNCTIONS);
         bound.addAll(StateBridge.WRITE_FUNCTIONS);
+        bound.addAll(StateBridge.WORLD_FUNCTIONS);
 
         Set<String> declaredNotBound = new LinkedHashSet<>(declared);
         declaredNotBound.removeAll(bound);
@@ -68,14 +69,32 @@ class InkContentValidationTest {
         // so an act that adds a new EXTERNAL without a binding fails the build.
         for (String act : InkTestSupport.actIdsWithInk()) {
             Story story = InkTestSupport.story(act);
-            FlagStore flags = new FlagStore();
             NarrativeState state = new NarrativeState();
-            var stage = InkTestSupport.stageDirector(flags);
             var progression = new ActProgression(state, id -> true,
-                    InkTestSupport.registry(InkTestSupport.sourceFor(act), act), stage);
-            new StateBridge(state, flags, mock(Inventory.class), new GameClock(), id -> true, stage,
-                    progression).install(story);
+                    InkTestSupport.registry(InkTestSupport.sourceFor(act), act));
+            new StateBridge(state, mock(Inventory.class), id -> true, progression).install(story);
             story.validateExternalBindings();
+        }
+    }
+
+    @Test
+    void everyActPlaysInInkysPreviewWithTheFallbacks() throws Exception {
+        // Inky has no Java host: the story must run on bridge.ink's fallbacks alone, and the author
+        // menu's world preview must list what stage() places.
+        for (String act : InkTestSupport.actIdsWithInk()) {
+            Story story = InkTestSupport.story(act);
+            story.setAllowExternalFunctionFallbacks(true);
+            while (story.canContinue()) story.Continue();
+            int preview = -1;
+            for (int i = 0; i < story.getCurrentChoices().size(); i++) {
+                if (story.getCurrentChoices().get(i).getText().startsWith("(what is staged")) preview = i;
+            }
+            assertTrue(preview >= 0, act + ": the author menu offers the world preview");
+            story.chooseChoiceIndex(preview);
+            StringBuilder out = new StringBuilder();
+            while (story.canContinue()) out.append(story.Continue());
+            assertTrue(out.toString().contains("[actor ") || out.toString().contains("[thing "),
+                    act + ": the preview printed the stage: " + out);
         }
     }
 

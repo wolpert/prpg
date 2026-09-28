@@ -68,7 +68,7 @@ tasks.register<Test>("validateContent") {
         includeTestsMatching("*ContentValidationTest")
         includeTestsMatching("*InkContentValidationTest")
         includeTestsMatching("*PackConsistencyTest")
-        includeTestsMatching("*StagingValidationTest")
+        includeTestsMatching("*InkWorldValidationTest")
         includeTestsMatching("*TilesetValidationTest")
         includeTestsMatching("*CharacterSpriteContentTest")
     }

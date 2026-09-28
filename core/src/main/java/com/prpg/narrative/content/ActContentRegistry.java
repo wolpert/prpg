@@ -1,5 +1,6 @@
 package com.prpg.narrative.content;
 
+import com.bladecoder.ink.runtime.Story;
 import com.prpg.config.ConfigLoader;
 import com.prpg.content.ContentResolver;
 import com.prpg.content.PackRegistry;
@@ -12,17 +13,24 @@ import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
 /**
  * The act spine, derived from data: the catalog ({@code narrative/manifest.yaml}) merged with each
- * mounted pack's {@code provides:}. Answers "which acts exist, in what order, where does each begin,
- * and is its content installed". There is no Java enum of acts; adding an act is a pack, not a
- * code change.
+ * mounted pack's {@code provides:}, plus each installed act story's {@code # entry:} tag. Answers
+ * "which acts exist, in what order, where does each begin, and is its content installed". There is
+ * no Java enum of acts; adding an act is a pack, not a code change.
+ *
+ * <p><b>Where an act begins is story data.</b> The first lines of an act's Ink carry a global tag
+ * {@code # entry: <map> [<spawn>]}; it is read from the compiled story the first time the act's
+ * entry is asked for, so the catalog never needs to know map names.
  *
  * <p>The manifest is read through the {@link ContentResolver} content seam, but {@link #useManifest}
  * lets headless tests install a catalog without GL.
@@ -38,6 +46,8 @@ public class ActContentRegistry {
     private final ActContentSource source;
 
     private Map<String, ActEntry> entries;
+    /** Acts whose story has already been read for its {@code # entry:} tag (read once, even if absent). */
+    private final Set<String> entryTagsRead = new HashSet<>();
 
     @Inject
     public ActContentRegistry(ConfigLoader configLoader, ContentResolver content, PackRegistry packs,
@@ -84,8 +94,7 @@ public class ActContentRegistry {
     /**
      * Folds each mounted pack's {@code provides:} entries into the catalog. An act new to the catalog
      * is added (self-declaring pack, no catalog edit needed); an act the catalog already advertises
-     * keeps its catalog metadata but picks up the fields only the pack knows: the entry map/spawn,
-     * and a title/gate flag the catalog left blank.
+     * keeps its catalog metadata but picks up a title or order the catalog left blank.
      */
     private void mergePackProvides() {
         for (PackManifest manifest : packs.manifests()) {
@@ -97,10 +106,7 @@ public class ActContentRegistry {
                     entries.put(p.id, fromProvided(p));
                     Log.debug("ActContentRegistry", "folded pack-provided act '" + p.id + "' into catalog");
                 } else {
-                    if (existing.entry_map == null) existing.entry_map = p.entryMap;
-                    if (existing.entry_spawn == null) existing.entry_spawn = p.entrySpawn;
                     if (existing.title == null) existing.title = p.title;
-                    if (existing.gate_flag == null) existing.gate_flag = p.gateFlag;
                     if (existing.order == 0) existing.order = p.order;
                 }
             }
@@ -112,9 +118,6 @@ public class ActContentRegistry {
         e.id = p.id;
         e.title = p.title;
         e.order = p.order;
-        e.gate_flag = p.gateFlag;
-        e.entry_map = p.entryMap;
-        e.entry_spawn = p.entrySpawn;
         // Self-declared (not in the bundled catalog): treat as deliverable, paid-tier by default.
         e.source = "DLC";
         e.entitlement = "PAID";
@@ -129,9 +132,52 @@ public class ActContentRegistry {
         return out;
     }
 
+    /** The act's catalog entry, with its entry map/spawn filled from its story when installed. */
     public ActEntry entry(String actId) {
         ensureLoaded();
-        return actId == null ? null : entries.get(actId);
+        ActEntry e = actId == null ? null : entries.get(actId);
+        if (e != null && e.entry_map == null && entryTagsRead.add(actId) && source.has(actId)) {
+            readEntryTag(e);
+        }
+        return e;
+    }
+
+    /** Fills {@code entry_map}/{@code entry_spawn} from the story's {@code # entry: map [spawn]} tag. */
+    private void readEntryTag(ActEntry e) {
+        List<String> tags;
+        try {
+            tags = new Story(source.read(e.id)).getGlobalTags();
+        } catch (Exception ex) {
+            Log.error("ActContentRegistry", "could not read the global tags of act '" + e.id + "'", ex);
+            return;
+        }
+        String[] entry = parseEntryTag(tags);
+        if (entry == null) {
+            Log.error("ActContentRegistry", "act '" + e.id + "' has no '# " + ENTRY_TAG
+                    + ": <map> [<spawn>]' tag at the top of its Ink; it has nowhere to begin");
+            return;
+        }
+        e.entry_map = entry[0];
+        e.entry_spawn = entry[1];
+    }
+
+    /** The global tag naming where an act begins: {@code # entry: gatehouse_yard start}. */
+    public static final String ENTRY_TAG = "entry";
+
+    private static final Pattern WHITESPACE = Pattern.compile("\\s+");
+
+    /** {@code [map, spawn-or-null]} from a story's global tags, or null when there is no entry tag. */
+    public static String[] parseEntryTag(List<String> tags) {
+        if (tags == null) return null;
+        for (String tag : tags) {
+            int colon = tag.indexOf(':');
+            if (colon < 0 || !ENTRY_TAG.equals(tag.substring(0, colon).trim())) continue;
+            List<String> words = WHITESPACE.splitAsStream(tag.substring(colon + 1).trim())
+                    .filter(w -> !w.isEmpty()).toList();
+            if (words.isEmpty()) return null;
+            return new String[]{words.get(0), words.size() > 1 ? words.get(1) : null};
+        }
+        return null;
     }
 
     /** True if the act is declared in the catalog (or provided by a mounted pack). */

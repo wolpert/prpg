@@ -18,7 +18,6 @@ import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.prpg.activities.BaseActivityScreen;
-import com.prpg.activities.OnCompleteApplier;
 import com.prpg.activities.match3.config.Match3Definition;
 import com.prpg.config.ConfigLoader;
 import com.prpg.content.ContentResolver;
@@ -89,9 +88,9 @@ public class Match3Screen extends BaseActivityScreen {
 
     @Inject
     public Match3Screen(SpriteBatch batch, Skin skin, Fonts fonts, ColorTextures colorTextures,
-                        ConfigLoader configLoader, ContentResolver content, OnCompleteApplier onComplete,
+                        ConfigLoader configLoader, ContentResolver content,
                         Provider<ScreenNavigator> nav) {
-        super(batch, skin, fonts, colorTextures, configLoader, content, onComplete, nav);
+        super(batch, skin, fonts, colorTextures, configLoader, content, nav);
     }
 
     @Override
@@ -108,7 +107,6 @@ public class Match3Screen extends BaseActivityScreen {
         selX = -1;
         selY = -1;
         won = false;
-        pendingDialogue = null;
         phase = Phase.IDLE;
         timer = 0f;
         cascades = 0;
@@ -322,7 +320,7 @@ public class Match3Screen extends BaseActivityScreen {
                 if (matches.isEmpty()) {
                     if (isWinReached()) {
                         won = true;
-                        pendingDialogue = onComplete.apply(activityId, definition.on_complete);
+                        markWon();
                         titleLabel.setText("Cleared.");
                         startWinPause(WIN_PAUSE_TIME);
                     }

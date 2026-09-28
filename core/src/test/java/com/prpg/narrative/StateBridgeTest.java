@@ -3,91 +3,92 @@ package com.prpg.narrative;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.prpg.items.Inventory;
-import com.prpg.world.FlagStore;
-import com.prpg.world.GameClock;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Asserts the Ink to Java bridge through the sample act: external functions land their effects on
- * the canonical model, reads reflect canonical state, and the act gate is readable and advanceable
- * from Ink. Drives real compiled Ink through the runner so the binding (including lookahead flags)
- * is exercised end to end.
+ * The Ink side of the game through the sample act: story variables written by Ink land in
+ * {@link StoryVariables} and stored values steer the story, the inventory and act gate are readable
+ * and writable from Ink, and the world functions reach Java only inside an evaluation. Drives real
+ * compiled Ink through the runner so the binding (including lookahead flags) is exercised end to end.
  */
 class StateBridgeTest {
 
-    private FlagStore flags;
+    private StoryVariables vars;
     private Inventory inventory;
-    private GameClock clock;
     private NarrativeState state;
 
     @BeforeEach
     void setUp() {
-        flags = new FlagStore();
+        vars = new StoryVariables();
         inventory = mock(Inventory.class);
-        clock = new GameClock();
+        when(inventory.add(anyString(), anyInt())).thenReturn(true);
         state = new NarrativeState();
         state.setCurrentActId("act1");
         state.unlockAct("act1");
     }
 
     private NarrativeRunner runner(Entitlement entitlement, String... acts) {
-        return InkTestSupport.runner(InkTestSupport.sourceFor(acts), state, flags, inventory, clock, entitlement);
+        return InkTestSupport.runner(InkTestSupport.sourceFor(acts), state, vars, inventory, entitlement);
     }
 
     @Test
-    void setFlagWritesToFlagStoreAndSpeakerTagIsRead() {
+    void inkVariableWritesLandInTheStoreAndSpeakerTagIsRead() {
         NarrativeRunner r = runner(id -> true, "act1");
         r.start("act1", "keeper_greeting", null);
-        assertTrue(flags.hasFlag("act1.met_keeper"));
+        assertTrue(vars.isTrue("met_keeper"), "~ met_keeper = true reached the store");
         assertTrue(r.currentText().contains("new hand"));
         assertEquals("Keeper", r.currentSpeaker());
         assertEquals(2, r.choiceTexts().size());
     }
 
     @Test
-    void hasFlagReadRoutesTheConversation() {
-        flags.setFlag("act1.hedge_cleared");
+    void storedValuesSteerTheConversation() {
+        vars.set("strongbox_opened", true);
         NarrativeRunner r = runner(id -> true, "act1");
-        r.start("act1", "keeper_greeting", null);
-        assertTrue(r.currentText().contains("hedge is down"), "the has_flag read picked the later branch");
+        r.start("act1", "keeper_inside", null);
+        assertTrue(r.currentText().contains("workbench"), "the stored value picked the later branch");
     }
 
     @Test
-    void dayReadAndAdvanceDayWrite() {
-        clock.setDay(3);
+    void theDayIsAPlainStoryVariable() {
+        vars.set("day", 3);
         NarrativeRunner r = runner(id -> true, "act1");
         r.start("act1", "bench_rest", null);
         assertTrue(r.currentText().contains("day 3"), r.currentText());
         r.selectChoice(0); // Rest a while.
-        assertEquals(4, clock.getDay(), "advance_day() ran exactly once (not during lookahead)");
-        assertTrue(flags.hasFlag("act1.rested"));
+        assertEquals(4, vars.getInt("day"), "~ day++ ran exactly once (not during lookahead)");
+        assertTrue(vars.isTrue("rested"));
         assertTrue(r.currentText().contains("day 4"), r.currentText());
     }
 
     @Test
     void hasItemGatesAndAdvanceActMovesTheSpine() {
-        when(inventory.has("brass_token", 1)).thenReturn(true);
+        vars.set("strongbox_opened", true);
         when(inventory.has("sigil", 1)).thenReturn(true);
         // act2 is installed and everything is owned, so the gate reads ADVANCED and the act moves.
         NarrativeRunner r = runner(id -> true, "act1", "act2");
         r.start("act1", "keeper_inside", null);
         List<String> lines = InkTestSupport.drain(r);
-        assertTrue(flags.hasFlag("act1.act_complete"));
-        assertTrue(state.isActUnlocked("act2"), "unlock_act landed on the canonical model");
+        assertTrue(vars.isTrue("act1_complete"));
+        assertTrue(state.isActUnlocked("act2"), "unlock_act landed on the act spine");
         assertTrue(lines.stream().anyMatch(l -> l.contains("gate is open")), lines.toString());
         assertEquals("act2", state.getCurrentActId(), "advance_act() moved the spine");
     }
 
     @Test
     void nextActGateExplainsARefusalWithoutAdvancing() {
-        when(inventory.has("brass_token", 1)).thenReturn(true);
+        vars.set("strongbox_opened", true);
         when(inventory.has("sigil", 1)).thenReturn(true);
         // act2 is NOT in the source (not installed); the no-enforcement entitlement owns it anyway.
         NarrativeRunner r = runner(id -> true, "act1");
@@ -105,13 +106,34 @@ class StateBridgeTest {
     }
 
     @Test
-    void giveItemIsCalledWithExactArguments() {
-        // keeper_inside with no token and no sigil: the first line only; nothing is given.
+    void aWonPuzzleGivesItsRewardFromInk() {
+        // The stand-in play command leaves activity_won at its world.ink default (true): a win.
         NarrativeRunner r = runner(id -> true, "act1");
-        r.start("act1", "keeper_inside", null);
+        r.start("act1", "strongbox", null);
+        List<String> lines = InkTestSupport.drain(r);
+        verify(inventory).add("brass_token", 1);
+        assertTrue(vars.isTrue("strongbox_opened"));
+        assertTrue(lines.stream().anyMatch(l -> l.contains("latch clicks")), lines.toString());
+    }
+
+    @Test
+    void aLostPuzzleGivesNothing() {
+        vars.set("activity_won", false);
+        NarrativeRunner r = runner(id -> true, "act1");
+        r.start("act1", "strongbox", null);
         InkTestSupport.drain(r);
-        assertFalse(r.isActive());
-        verify(inventory, org.mockito.Mockito.never()).add(org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.anyInt());
+        verify(inventory, never()).add(anyString(), anyInt());
+        assertFalse(vars.isTrue("strongbox_opened"));
+    }
+
+    @Test
+    void worldFunctionsReachJavaOnlyInsideAnEvaluation() {
+        NarrativeRunner r = runner(id -> true, "act1");
+        List<StoryCall> calls = new ArrayList<>();
+        assertTrue(r.evaluate("act1", "stage", calls::add));
+        assertTrue(calls.stream().anyMatch(c -> c.function().equals("actor")
+                        && c.args().equals(List.of("keeper", "gatehouse_yard", "keeper_post", "keeper_greeting"))),
+                "a divert-target argument arrives as its knot name: " + calls);
+        assertFalse(r.evaluate("act1", "no_such_function", calls::add));
     }
 }

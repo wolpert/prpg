@@ -44,25 +44,13 @@ public class PackManifest {
     /** Generated list of every content file in this pack, relative to the pack root. */
     public List<String> files = new ArrayList<>();
 
-    /** Flags this pack declares (merged into the global flag namespace). */
-    public List<String> flags = new ArrayList<>();
-
-    /** Flags this pack consumes but does not declare; validated against the catalog. */
-    public List<String> requiresFlags = new ArrayList<>();
-
     /**
-     * A narrative act/epilogue this pack provides. Mirrors {@code NarrativeManifest.ActEntry}. An act
-     * owns its own maps, so it also names the map + spawn the player lands on when the act begins.
+     * A narrative act/epilogue this pack provides: catalog metadata only. Where the act begins is
+     * story data, the {@code # entry:} tag at the top of the act's Ink.
      */
     public static class Provided {
         public String id;
         public String title;
         public int order;
-        /** Optional flag whose setting marks this act's narrative gate as crossed. */
-        public String gateFlag;
-        /** Map id (a TMX base name in this pack) the act opens on. */
-        public String entryMap;
-        /** Named {@code spawn} object on {@link #entryMap}; the first spawn when null. */
-        public String entrySpawn;
     }
 }

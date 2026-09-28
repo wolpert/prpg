@@ -3,7 +3,6 @@ package com.prpg.narrative;
 import com.prpg.narrative.config.NarrativeManifest.ActEntry;
 import com.prpg.narrative.content.ActContentRegistry;
 import com.prpg.util.Log;
-import com.prpg.world.stage.StageDirector;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
@@ -22,21 +21,17 @@ public class ActProgression {
     private final NarrativeState state;
     private final Entitlement entitlement;
     private final ActContentRegistry registry;
-    private final StageDirector stage;
 
     @Inject
-    public ActProgression(NarrativeState state, Entitlement entitlement, ActContentRegistry registry,
-                          StageDirector stage) {
+    public ActProgression(NarrativeState state, Entitlement entitlement, ActContentRegistry registry) {
         this.state = state;
         this.entitlement = entitlement;
         this.registry = registry;
-        this.stage = stage;
     }
 
-    /** Starts a fresh playthrough at the catalog's first act (unlocked, current, staged). */
+    /** Starts a fresh playthrough at the catalog's first act (unlocked and current). */
     public void beginNewGame() {
         state.reset();
-        stage.reset();
         String first = registry.firstActId();
         if (first == null) {
             Log.error("ActProgression", "no acts declared in any pack; nothing to play");
@@ -44,7 +39,6 @@ public class ActProgression {
         }
         state.unlockAct(first);
         state.setCurrentActId(first);
-        stage.enterAct(first);
         Log.info("ActProgression", "new game at act '" + first + "'");
     }
 
@@ -82,9 +76,8 @@ public class ActProgression {
 
     /**
      * Attempts to advance to the next act. Only mutates state on {@link GateResult#ADVANCED}: the
-     * current act changes and the new act's staging becomes authoritative (the previous act's
-     * imperative overrides are dropped, so a DLC act can run standalone). {@code WorldScreen} notices
-     * the act change and moves the player to the new act's entry map.
+     * current act changes, so the world is staged from the new act's {@code stage()} from then on.
+     * {@code WorldScreen} notices the act change and moves the player to the new act's entry map.
      */
     public GateResult requestAdvance() {
         GateResult result = evaluateAdvance();
@@ -94,7 +87,6 @@ public class ActProgression {
             return result;
         }
         state.setCurrentActId(next);
-        stage.enterAct(next);
         Log.info("ActProgression", "advanced to act '" + next + "'");
         return result;
     }

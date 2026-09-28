@@ -1,6 +1,5 @@
 package com.prpg.activities.merge.config;
 
-import com.prpg.activities.config.OnCompleteConfig;
 import java.util.List;
 import java.util.Map;
 
@@ -17,7 +16,6 @@ public class MergeDefinition {
     public List<LadderEntry> ladder;
     public Map<String, Integer> starting_inventory;
     public WinConfig win;
-    public OnCompleteConfig on_complete;
 
     public static class LadderEntry {
         public String id;

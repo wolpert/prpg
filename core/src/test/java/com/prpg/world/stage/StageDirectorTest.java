@@ -6,261 +6,162 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
-import com.prpg.config.ConfigLoader;
-import com.prpg.content.ContentResolver;
-import com.prpg.world.FlagStore;
-import com.prpg.world.stage.config.ActorDef;
-import com.prpg.world.stage.config.StagingConfig;
-import com.prpg.world.stage.config.StagingConfig.At;
-import com.prpg.world.stage.config.StagingConfig.CastEntry;
-import com.prpg.world.stage.config.StagingConfig.ObstacleEntry;
-import com.prpg.world.stage.config.StagingConfig.PropEntry;
-import com.prpg.world.stage.config.StagingConfig.ActivityRef;
+import com.bladecoder.ink.compiler.Compiler;
+import com.prpg.items.Inventory;
+import com.prpg.narrative.InkTestSupport;
+import com.prpg.narrative.NarrativeRunner;
+import com.prpg.narrative.NarrativeState;
+import com.prpg.narrative.StoryVariables;
+import com.prpg.narrative.content.ActContentSource;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Headless coverage of the staging resolver. Placement is a pure function of the flags plus the
- * imperative overrides, so the whole thing is testable with no GL, no TMX and no content files —
- * staging is injected via {@link StageDirector#useStaging}.
+ * Staging is the act's Ink {@code stage()} and {@code cast()} evaluated against story state. Drives
+ * the real sample act through its beats, headless: no GL, no TMX.
  */
 class StageDirectorTest {
 
-    private static final String SQUARE = "village_square";
-    private static final String PATH = "boundary_path";
-
-    private FlagStore flags;
+    private StoryVariables vars;
+    private NarrativeState state;
     private StageDirector stage;
 
     @BeforeEach
     void setUp() {
-        flags = new FlagStore();
-        ActorRegistry actors = mock(ActorRegistry.class);
-        when(actors.get("rowan")).thenReturn(actor("rowan", "5E8B7E"));
-        when(actors.get("wren")).thenReturn(actor("wren", "E0C060"));
-        stage = new StageDirector(new ConfigLoader(), mock(ContentResolver.class), flags, actors);
+        vars = new StoryVariables();
+        state = new NarrativeState();
+        state.setCurrentActId("act1");
+        state.unlockAct("act1");
+        NarrativeRunner runner = InkTestSupport.runner(InkTestSupport.sourceFor("act1", "act2"), state,
+                vars, mock(Inventory.class), id -> true);
+        stage = new StageDirector(runner, state, vars);
     }
 
-    private static ActorDef actor(String id, String color) {
-        ActorDef def = new ActorDef();
-        def.id = id;
-        def.color = color;
-        return def;
-    }
-
-    private static At at(String map, String marker) {
-        At a = new At();
-        a.map = map;
-        a.marker = marker;
-        return a;
-    }
-
-    private static CastEntry cast(String actor, String map, String marker, String dialogue) {
-        CastEntry e = new CastEntry();
-        e.actor = actor;
-        e.at = at(map, marker);
-        e.dialogue = dialogue;
-        return e;
-    }
-
-    private StagedPlacement only(String mapId) {
-        List<StagedPlacement> staged = stage.stagedFor(mapId);
-        assertEquals(1, staged.size(), "expected exactly one staged thing on " + mapId + ", got " + staged);
-        return staged.get(0);
-    }
-
-    // --- declarative placement ----------------------------------------------------------------
-
-    @Test
-    void lastMatchingCastEntryWins() {
-        StagingConfig config = new StagingConfig();
-        config.cast.add(cast("rowan", SQUARE, "well_side", "rowan_square"));
-        CastEntry moved = cast("rowan", PATH, "stone_row", "rowan_worried");
-        moved.when = List.of("a1.learned_to_bundle");
-        config.cast.add(moved);
-        stage.useStaging("act1", config);
-
-        // Story-early: the first entry is the only match.
-        assertEquals(SQUARE, only(SQUARE).mapId());
-        assertTrue(stage.stagedFor(PATH).isEmpty(), "he hasn't moved yet");
-
-        flags.setFlag("a1.learned_to_bundle");
-
-        // Story-late: the later entry wins and he is gone from the square entirely.
-        assertTrue(stage.stagedFor(SQUARE).isEmpty(), "he left the square");
-        StagedPlacement now = only(PATH);
-        assertEquals("stone_row", now.marker());
-        assertEquals("rowan_worried", now.dialogue(), "the later entry re-voices him too");
+    private StagedPlacement find(String id) {
+        for (StagedPlacement p : stage.all()) {
+            if (id.equals(p.id())) return p;
+        }
+        return null;
     }
 
     @Test
-    void unlessRemovesAnActorFromTheWorld() {
-        StagingConfig config = new StagingConfig();
-        CastEntry wren = cast("wren", SQUARE, "wren_fence", "wren_rhyme");
-        wren.unless = List.of("a1.saw_margaret");
-        config.cast.add(wren);
-        stage.useStaging("act1", config);
+    void theOpeningTableau() {
+        StagedPlacement keeper = find("keeper");
+        assertNotNull(keeper);
+        assertEquals(StagedPlacement.Kind.ACTOR, keeper.kind());
+        assertEquals("gatehouse_yard", keeper.mapId());
+        assertEquals("keeper_post", keeper.marker());
+        assertEquals("keeper_greeting", keeper.knot());
+        assertEquals("npc", keeper.sprite(), "the look comes from cast()");
+        assertEquals("C06A2E", keeper.color());
 
-        assertEquals("wren", only(SQUARE).id());
-        flags.setFlag("a1.saw_margaret");
-        assertTrue(stage.stagedFor(SQUARE).isEmpty(), "she is gone once the flag is set");
+        StagedPlacement hedge = find("hedge");
+        assertNotNull(hedge);
+        assertTrue(hedge.solid(), "the hedge bars the door");
+        assertEquals("hedge", hedge.knot());
+
+        assertNull(find("workbench"), "the workbench waits for the strongbox");
+        assertNull(find("gate_arch"), "the arch zone waits for the keeper");
+        assertNotNull(find("travel_ration"));
+        assertEquals(List.of("keeper", "hedge", "bench"),
+                stage.stagedFor("gatehouse_yard").stream().map(StagedPlacement::id).toList());
     }
 
     @Test
-    void anActorWithNoMatchingEntryIsNotInTheWorld() {
-        StagingConfig config = new StagingConfig();
-        CastEntry later = cast("rowan", SQUARE, "well_side", "rowan_square");
-        later.when = List.of("a1.never_set");
-        config.cast.add(later);
-        stage.useStaging("act1", config);
-
-        assertTrue(stage.stagedFor(SQUARE).isEmpty());
-    }
-
-    // --- solidity -----------------------------------------------------------------------------
-
-    @Test
-    void solidityIsRederivedFromFlags() {
-        StagingConfig config = new StagingConfig();
-        CastEntry guard = cast("rowan", PATH, "stone_row", "rowan_worried");
-        guard.solid = true;
-        guard.solid_unless = List.of("a1.rowan_stood_aside");
-        config.cast.add(guard);
-        stage.useStaging("act1", config);
-
-        assertTrue(only(PATH).solid(), "he bars the path");
-        flags.setFlag("a1.rowan_stood_aside");
-        assertFalse(only(PATH).solid(), "the same entry now lets you by — no reload, no second entry");
+    void clearingTheHedgeMovesTheKeeperInsideAndOpensTheDoor() {
+        vars.set("hedge_cleared", true);
+        StagedPlacement keeper = find("keeper");
+        assertEquals("gatehouse_hall", keeper.mapId());
+        assertEquals("keeper_desk", keeper.marker());
+        assertEquals("keeper_inside", keeper.knot());
+        assertNull(find("hedge"));
     }
 
     @Test
-    void clearedObstacleStaysCleared() {
-        StagingConfig config = new StagingConfig();
-        ObstacleEntry herbs = new ObstacleEntry();
-        herbs.id = "hall_overgrowth";
-        herbs.at = at(SQUARE, "hall_north");
-        herbs.solid = true;
-        herbs.cleared_when = "a1.hall_cleared";
-        herbs.activity = new ActivityRef();
-        herbs.activity.type = "match3";
-        herbs.activity.id = "house_hall_overgrowth";
-        config.obstacles.add(herbs);
-        stage.useStaging("act1", config);
-
-        StagedPlacement blocking = only(SQUARE);
-        assertTrue(blocking.solid());
-        assertTrue(blocking.hasActivity());
-        assertEquals("match3", blocking.activityType());
-
-        flags.setFlag("a1.hall_cleared");
-        assertTrue(stage.stagedFor(SQUARE).isEmpty(), "solving it opens the way for good");
-    }
-
-    // --- imperative overrides (the Ink seam) --------------------------------------------------
-
-    @Test
-    void overrideBeatsTheDeclarativeRule() {
-        StagingConfig config = new StagingConfig();
-        config.cast.add(cast("rowan", SQUARE, "well_side", "rowan_square"));
-        stage.useStaging("act1", config);
-
-        int before = stage.revision();
-        stage.place("rowan", PATH, "stone_row");
-        assertTrue(stage.revision() != before, "an override bumps the revision so the world refreshes");
-
-        assertTrue(stage.stagedFor(SQUARE).isEmpty());
-        assertEquals("stone_row", only(PATH).marker());
-        assertEquals("rowan_square", only(PATH).dialogue(), "moving him doesn't change his lines");
+    void aZoneAppearsAndGoesAsTheStoryMoves() {
+        vars.set("met_keeper", true);
+        StagedPlacement arch = find("gate_arch");
+        assertNotNull(arch);
+        assertEquals(StagedPlacement.Kind.ZONE, arch.kind());
+        vars.set("crossed_gate", true);
+        assertNull(find("gate_arch"), "fire-once is just a variable in stage()");
     }
 
     @Test
-    void removeAndRevoiceAndSetSolid() {
-        StagingConfig config = new StagingConfig();
-        config.cast.add(cast("wren", SQUARE, "wren_fence", "wren_rhyme"));
-        stage.useStaging("act1", config);
-
-        stage.setDialogue("wren", "wren_afraid");
-        assertEquals("wren_afraid", only(SQUARE).dialogue());
-
-        stage.setSolid("wren", true);
-        assertTrue(only(SQUARE).solid());
-
-        stage.remove("wren");
-        assertTrue(stage.stagedFor(SQUARE).isEmpty());
+    void aLookCanDependOnTheStoryToo() {
+        assertEquals("6E4A2A", find("strongbox").color());
+        vars.set("strongbox_opened", true);
+        assertEquals("4A3A28", find("strongbox").color());
+        assertNotNull(find("workbench"));
     }
 
     @Test
-    void anOverrideRelocatesAnObstacleRatherThanGhostingIt() {
-        StagingConfig config = new StagingConfig();
-        ObstacleEntry debris = new ObstacleEntry();
-        debris.id = "debris";
-        debris.at = at(SQUARE, "gate");
-        debris.solid = true;
-        config.obstacles.add(debris);
-        stage.useStaging("act1", config);
-        assertEquals("debris", only(SQUARE).id());
-
-        stage.place("debris", PATH, "stone_row");
-        assertTrue(stage.stagedFor(SQUARE).isEmpty(), "it must not linger on the map it left");
-        assertEquals("stone_row", only(PATH).marker());
+    void revisionMovesOnlyWhenTheWorldChanges() {
+        int r0 = stage.revision();
+        vars.set("rested", true); // stage() doesn't read it
+        assertEquals(r0, stage.revision(), "an irrelevant change doesn't rebuild the world");
+        vars.set("hedge_cleared", true);
+        assertTrue(stage.revision() > r0);
     }
 
     @Test
-    void inkCanIntroduceAnActorTheStagingFileNeverMentions() {
-        stage.useStaging("act1", new StagingConfig());
-        stage.place("rowan", PATH, "stone_row");
-
-        StagedPlacement introduced = only(PATH);
-        assertEquals("rowan", introduced.id());
-        assertEquals("5E8B7E", introduced.color(), "identity still comes from the actor registry");
+    void theCurrentActDecidesWhichStoryIsAsked() {
+        state.setCurrentActId("act2");
+        assertEquals(List.of("traveller"), stage.all().stream().map(StagedPlacement::id).toList());
+        assertEquals("7A6E9B", find("traveller").color());
     }
 
     @Test
-    void isOnAnswersTheInkRead() {
-        StagingConfig config = new StagingConfig();
-        config.cast.add(cast("wren", SQUARE, "wren_fence", "wren_rhyme"));
-        stage.useStaging("act1", config);
+    void locksDuplicatesAndBadCalls() throws Exception {
+        String ink = """
+                EXTERNAL actor(id, map, marker, knot)
+                EXTERNAL thing(id, map, marker, knot, solid)
+                EXTERNAL lock(portal)
+                EXTERNAL define(id, sprite, color)
+                EXTERNAL quest(title)
+                -> DONE
+                === function stage() ===
+                ~ actor("a", "m", "first", -> talk)
+                ~ actor("a", "m", "second", -> talk)
+                ~ thing("rock", "m", "spot", "", false)
+                ~ thing("broken", "m", "", -> talk, true)
+                ~ lock("back_door")
+                ~ quest("not here")
+                === function cast() ===
+                ~ define("a", "", "112233")
+                === talk ===
+                Hi.
+                -> END
+                """;
+        Compiler.Options options = new Compiler.Options();
+        options.sourceFilename = "stage.ink";
+        String json = new Compiler(ink, options).compile().toJson();
+        ActContentSource source = new ActContentSource() {
+            @Override
+            public boolean has(String actId) {
+                return "t".equals(actId);
+            }
 
-        assertTrue(stage.isOn("wren", SQUARE));
-        assertFalse(stage.isOn("wren", PATH));
-        assertFalse(stage.isOn("rowan", SQUARE));
-    }
+            @Override
+            public String read(String actId) {
+                return json;
+            }
+        };
+        state.setCurrentActId("t");
+        NarrativeRunner runner = InkTestSupport.runner(source, state, vars, mock(Inventory.class), id -> true);
+        stage = new StageDirector(runner, state, vars);
 
-    // --- act boundaries -----------------------------------------------------------------------
-
-    @Test
-    void enteringAnActDropsThePreviousActsOverrides() {
-        StagingConfig config = new StagingConfig();
-        config.cast.add(cast("rowan", SQUARE, "well_side", "rowan_square"));
-        stage.useStaging("act1", config);
-        stage.remove("rowan");
-        assertTrue(stage.stagedFor(SQUARE).isEmpty());
-
-        // Act II's own staging is authoritative: the Act I removal does not follow him across.
-        StagingConfig actTwo = new StagingConfig();
-        actTwo.cast.add(cast("rowan", SQUARE, "well_side", "rowan_afterward"));
-        stage.useStaging("act2", actTwo);
-
-        assertEquals("rowan_afterward", only(SQUARE).dialogue());
-    }
-
-    // --- props --------------------------------------------------------------------------------
-
-    @Test
-    void propOverrideRevoicesMapOwnedFurniture() {
-        StagingConfig config = new StagingConfig();
-        PropEntry dresser = new PropEntry();
-        dresser.prop = "dresser";
-        dresser.dialogue = "dresser_act_two";
-        config.props.add(dresser);
-        stage.useStaging("act2", config);
-
-        StagedPlacement override = stage.propOverride("dresser");
-        assertNotNull(override);
-        assertEquals("dresser_act_two", override.dialogue());
-        assertNull(stage.propOverride("hearth"), "a prop this act says nothing about keeps its map value");
+        StagedPlacement a = find("a");
+        assertEquals("second", a.marker(), "the last call for an id wins");
+        assertEquals("112233", a.color());
+        StagedPlacement rock = find("rock");
+        assertNull(rock.knot(), "\"\" means nothing to interact with");
+        assertFalse(rock.solid());
+        assertNull(find("broken"), "a placement without a marker is dropped, not half-built");
+        assertTrue(stage.isPortalLocked("back_door"));
+        assertFalse(stage.isPortalLocked("front_door"));
+        assertEquals(2, stage.all().size(), "quest() in stage() is ignored");
     }
 }
