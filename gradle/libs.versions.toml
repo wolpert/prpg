@@ -37,7 +37,7 @@ construo = "2.2.2"
 # is not available. The version literal in settings.gradle.kts MUST be kept in sync with this entry.
 foojayResolver = "1.0.0"
 graalNative = "1.1.14"
-spotless = "8.10.3"
+spotless = "8.10.4"
 errorprone = "5.1.1"
 errorproneCore = "2.50.0"
 
