@@ -25,21 +25,21 @@ mockito = "5.24.0"
 lwjgl3 = "3.4.3"
 
 # Android
-agp = "9.4.1"
+agp = "9.5.0"
 desugar = "2.1.5"
 androidCompileSdk = "36"
 androidTargetSdk = "35"
 androidMinSdk = "21"
 
 # Gradle plugins
-construo = "2.2.2"
+construo = "2.2.3"
 # foojay-resolver-convention is applied in settings.gradle.kts where the type-safe `libs` accessor
 # is not available. The version literal in settings.gradle.kts MUST be kept in sync with this entry.
 foojayResolver = "1.0.0"
-graalNative = "1.1.16"
+graalNative = "1.1.17"
 spotless = "8.10.4"
 errorprone = "5.1.1"
-errorproneCore = "2.50.0"
+errorproneCore = "2.51.0"
 
 [libraries]
 # libGDX core
