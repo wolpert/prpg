@@ -11,10 +11,10 @@ dependencies {
     // sync with `bladeInk` in gradle/libs.versions.toml (the version catalog isn't visible from the
     // buildSrc build, so the coordinate is spelled out here). blade-ink-compiler pulls the matching
     // blade-ink runtime transitively (compile() returns a runtime Story we call toJson() on).
-    implementation("com.bladecoder.ink:blade-ink-compiler:1.3.2")
+    implementation("com.bladecoder.ink:blade-ink-compiler:1.3.3")
     // The compiler returns a runtime Story (we call toJson() on it) and exposes Error.ErrorHandler,
     // but does not pull the runtime transitively — declare it explicitly.
-    implementation("com.bladecoder.ink:blade-ink:1.3.2")
+    implementation("com.bladecoder.ink:blade-ink:1.3.3")
 }
 
 java {
