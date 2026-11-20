@@ -15,7 +15,7 @@ snakeYaml = "2.7"
 
 # Narrative (inkle Ink; bladecoder Java port. Runtime + build-time compiler share one version, and
 # buildSrc/build.gradle.kts spells the same version out because it cannot see this catalog.)
-bladeInk = "1.3.2"
+bladeInk = "1.3.3"
 
 # Test
 junit = "6.1.3"
@@ -36,7 +36,7 @@ construo = "2.3.0"
 # foojay-resolver-convention is applied in settings.gradle.kts where the type-safe `libs` accessor
 # is not available. The version literal in settings.gradle.kts MUST be kept in sync with this entry.
 foojayResolver = "1.0.0"
-graalNative = "1.1.18"
+graalNative = "1.1.19"
 spotless = "8.11.0"
 errorprone = "5.2.0"
 errorproneCore = "2.52.0"
